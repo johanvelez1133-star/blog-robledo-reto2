@@ -1,8 +1,8 @@
-"Variable","APE (pp)","IC 95% inferior","IC 95% superior"
-"Jefe informal (vs. formal)",9.7,-1.6,21.5
-"Jefe desempleado (vs. formal)",28.6,12.1,45.2
-"Estrato",-10.5,-16.7,-3.9
-"Tamaño del hogar",-1.7,-5.9,1.8
-"Edad del jefe",0.3,-0.1,0.7
-"Jefatura femenina",6,-3.6,16.7
-"Educación del jefe (nivel)",-1.6,-4.7,1.4
+﻿Variable,APE (pp),IC 95% inferior,IC 95% superior
+Jefe informal (vs. formal),9.7,-1.6,21.5
+Jefe desempleado (vs. formal),28.6,12.1,45.2
+Estrato,-10.5,-16.7,-3.9
+Tamaño del hogar,-1.7,-5.9,1.8
+Edad del jefe,0.3,-0.1,0.7
+Jefatura femenina,6.0,-3.6,16.7
+Educación del jefe (nivel),-1.6,-4.7,1.4
