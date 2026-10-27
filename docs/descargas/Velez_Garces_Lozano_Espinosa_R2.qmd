@@ -1,0 +1,937 @@
+---
+title: "Inseguridad alimentaria y situación laboral del jefe de hogar en la comuna de Robledo, Medellín"
+subtitle: "Reto 2 — Haciendo Microeconomía"
+author:
+  - "Johan David Vélez Cardona"
+  - "Juliana Garcés Moncada"
+  - "Marien Lozano Cifuentes"
+  - "Juan José Espinosa Toro"
+date: "2026-10-22"
+date-format: "D [de] MMMM [de] YYYY"
+lang: es
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    pdf-engine: pdflatex
+    documentclass: article
+    fontsize: 10pt
+    geometry:
+      - margin=1in
+    colorlinks: false
+    include-in-header:
+      - text: |
+          \usepackage{needspace}
+          \usepackage{xurl}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                       fig.align = "center", fig.width = 6, fig.height = 4)
+
+# Asegura un locale UTF-8 para que las tildes/ñ se vean bien en tablas y
+# gráficos sin importar el sistema operativo (Windows/Mac/Linux). Si ninguna
+# de estas opciones existe en su máquina, R sigue usando su locale por
+# defecto sin detener el knit.
+locales_utf8 <- c("es_CO.UTF-8", "es_ES.UTF-8", "en_US.UTF-8", "C.UTF-8",
+                   "C.utf8", "Spanish_Colombia.utf8", "Spanish.utf8")
+for (loc in locales_utf8) {
+  ok <- suppressWarnings(try(Sys.setlocale("LC_ALL", loc), silent = TRUE))
+  if (!inherits(ok, "try-error") && ok != "") break
+}
+# Separador decimal: coma en tablas y en el texto (el informe está en español)
+options(OutDec = ",")
+knitr::knit_hooks$set(inline = function(x) {
+  if (is.numeric(x)) format(round(x, 4), big.mark = ".", decimal.mark = ",", scientific = FALSE, trim = TRUE)
+  else paste(as.character(x), collapse = ", ")
+})
+library(readxl)
+library(dplyr)
+library(car)
+library(knitr)
+library(ggplot2)
+
+# --- Rutas de los archivos de datos ---
+# Coloquen ECV_2025.xlsx y Diccionario-de-Datos-2025.xlsx en la misma carpeta
+# que este .qmd, o cambien las rutas de abajo.
+ruta_ecv <- "ECV_2025.xlsx"
+ruta_diccionario <- "Diccionario-de-Datos-2025.xlsx"
+```
+
+# Introducción
+
+La Encuesta de Calidad de Vida (ECV) de Medellín 2025, que levanta el Departamento Administrativo de Planeación de la Alcaldía, describe con bastante detalle cómo viven los hogares de la ciudad, comuna por comuna. Aquí nos centramos en la comuna 7, Robledo. Queremos saber si la **inseguridad alimentaria del hogar** (variable *y*) se asocia con la **situación laboral del jefe de hogar** (variable *x*: empleo formal, informal o desempleo), una vez controlamos por características socioeconómicas del hogar. Limitamos el análisis a hogares cuyo jefe está en la fuerza laboral, ocupado o desempleado, y tiene entre 15 y 64 años, porque el ingreso del hogar condiciona el acceso económico a los alimentos (FAO, 2011, p. 1). El documento sigue este orden. Primero, la revisión de la literatura. Después, el contexto de la comuna (sección 2), los datos y las estadísticas descriptivas (sección 3) y el modelo (sección 4). Los resultados están en la sección 5, que incluye una encuesta breve y propia a ocho hogares de la comuna (sección 5.1), y las conclusiones con sus implicaciones de política, en la sección 6.
+
+Hay que decirlo con claridad: elegimos Robledo después de ver resultados. Exploramos las 16 comunas urbanas de Medellín (los 5 corregimientos rurales quedan fuera del alcance del reto) y miramos la relación bivariada entre inseguridad alimentaria y varias definiciones candidatas de *x*. También pesaron criterios prácticos del grupo, como contar con una muestra suficiente y poder hacer trabajo de campo. Como esa búsqueda no se corrigió por comparaciones múltiples, el valor-p del modelo de Robledo no debe leerse como si hubiéramos fijado la comuna de antemano. Además, Robledo no es la comuna con la asociación más fuerte (ver la tabla de la sección 3.5). La escogimos por tres razones: su muestra es grande (más de 500 hogares), la relación tiene el signo esperado con varias definiciones de *x* y el trabajo de campo era viable.
+
+El documento persigue cuatro objetivos: (i) caracterizar a los hogares de Robledo con los microdatos de la ECV 2025; (ii) explicar cómo construimos las variables y presentar las estadísticas descriptivas, incluida la relación entre *y* y *x* dentro de la comuna; (iii) estimar modelos de elección discreta (logit y probit) para la probabilidad de que un hogar esté en inseguridad alimentaria moderada o severa según la situación laboral del jefe; y (iv) derivar implicaciones de política pública, dejando claros sus límites.
+
+## Revisión de la literatura
+
+**Concepto y medición.** Siguiendo la Cumbre Mundial sobre la Alimentación de 1996, la FAO entiende la seguridad alimentaria como el acceso físico, social y económico, en todo momento, a alimentos suficientes, inocuos y nutritivos. La organiza en cuatro dimensiones (disponibilidad, acceso, utilización y estabilidad) y separa la inseguridad crónica, ligada a la pobreza prolongada, de la transitoria, que nace de choques de oferta o de ingreso (FAO, 2011, p. 1). Nuestro trabajo se ubica en el acceso económico: el desempleo del jefe es un choque de ingreso que puede llevar a la inseguridad a un hogar que antes no la sufría. En Colombia, la ENSIN registró inseguridad alimentaria en el 57,4% de los hogares en 2010 y en el 54,2% en 2015 (ICBF, 2020), y la FIES del DANE midió 28,1% de inseguridad moderada o grave en 2022 (DANE, 2023, p. 7). Las cifras no se pueden comparar, porque las escalas son distintas.
+
+La ELCSA tiene 15 preguntas (8 sobre el hogar y los adultos y 7 sobre los menores de 18 años), con un período de referencia de tres meses y la formulación "por falta de dinero u otros recursos" (FAO, 2012, pp. 25-28 y 41-42; los puntos de corte están en la Tabla 1, p. 68). En Colombia, Muñoz-Astudillo et al. (2010) la aplicaron a 150 hogares de gestantes adolescentes de Pereira y hallaron una consistencia interna alta (alfa de Cronbach entre 0,93 y 0,96). La forma de medir también cambia los resultados: Del Castillo et al. (2012) clasificaron 432 hogares con cinco métodos distintos y los factores asociados variaron según el método.
+
+**Desempleo e inseguridad alimentaria.** El desempleo del jefe es el determinante más documentado. Con datos longitudinales de Estados Unidos, Huang et al. (2016) estiman que el desempleo del jefe se asocia con mayores probabilidades de inseguridad alimentaria (OR de 1,55), y el resultado casi no cambia al controlar por la inseguridad previa al desempleo (OR de 1,54); eso atenúa, sin eliminarla, la preocupación por la causalidad inversa. En 13 países de América Latina y el Caribe, durante los primeros meses de la pandemia, la pérdida de empleo de algún miembro del hogar se asoció con una razón de prevalencias ajustada de 1,71 (Hernández-Vásquez et al., 2022). En Colombia, con la ECV de 2008, perder el empleo el jefe aumentó la probabilidad de inseguridad (Álvarez-Uribe et al., 2010, pp. 882-883); Del Castillo et al. (2012, pp. 552-553) encuentran, con la ELCSA, una razón de prevalencias ajustada de 1,52 para quienes perdieron el empleo en el último mes; y Sinclair et al. (2022), con la Gallup World Poll de 2016 y 2019, hallan que no pertenecer a la fuerza laboral, frente a estar empleado, se asocia con más inseguridad en ambos años (OR de 1,54 y 1,36), aunque esa categoría mezcla a desempleados e inactivos. Entre hogares beneficiarios de un paquete alimentario en Medellín, el jefe desempleado tuvo unas cinco veces las probabilidades de inseguridad severa en el análisis bivariado (OR de 5,06; Medina Rodríguez et al., 2024).
+
+**Informalidad.** No es lo mismo que el desempleo. La OIT considera informales, entre otros, a los asalariados cuya relación laboral no está sujeta a la legislación laboral ni a la protección social (OIT, 2003), mientras que el DANE la mide por el tamaño del establecimiento: son informales, entre otros, los asalariados y los trabajadores por cuenta propia de establecimientos de hasta cinco personas, salvo los profesionales independientes (DANE, 2009, pp. 11-12). Nuestra categoría (asalariado sin prestaciones o cuenta propia) sigue el criterio de la OIT para los asalariados, pero no distingue el tamaño del establecimiento, así que no coincide con la medición oficial. La evidencia sobre su relación con la inseguridad alimentaria es más escasa y no es uniforme: en Lima, Santos et al. (2022) no encuentran asociación entre el empleo del jefe y la inseguridad alimentaria en el modelo ajustado.
+
+**Modelos, controles y otros determinantes.** Cuando la inseguridad se mide como una variable dicotómica, los trabajos suelen estimar regresiones logísticas (Álvarez-Uribe et al., 2010; Sinclair et al., 2022; Santos et al., 2022; Medina Rodríguez et al., 2024) o razones de prevalencia (Del Castillo et al., 2012; Hernández-Vásquez et al., 2022). Los controles más comunes son el estrato o el ingreso, y la educación, la edad y el sexo del jefe. En la ECV de 2008 hubo más inseguridad en los hogares encabezados por mujeres y menos a medida que subían el estrato y la educación del jefe (Álvarez-Uribe et al., 2010, p. 882); en 2022, la inseguridad moderada o grave fue del 30,9% en hogares con jefatura femenina y del 25,9% con jefatura masculina (DANE, 2023, p. 13); y en Lima los hogares con jefa tuvieron cerca de 2,8 veces las probabilidades de inseguridad (Santos et al., 2022). Por eso incluimos estos controles.
+
+**Políticas evaluadas.** Encontramos dos líneas. La primera es el apoyo al ingreso: Familias en Acción aumentó el consumo total y el de alimentos de hogares muy pobres y mejoró la calidad de su dieta (Attanasio y Mesnard, 2006), y entre los hogares latinoamericanos que perdieron el empleo en la pandemia, los que recibieron transferencias tuvieron menor prevalencia de inseguridad (razón de prevalencias ajustada de 0,84; Hernández-Vásquez et al., 2022). En Medellín, un estudio de antes y después, sin grupo de comparación, con 317 hogares beneficiarios de bonos alimentarios mostró una caída de la inseguridad percibida y recomendó acompañar los bonos con acciones sobre los medios de vida (Puerta Zapata et al., 2026). La segunda línea es la empleabilidad: un ensayo aleatorio de capacitación para jóvenes en Colombia aumentó el empleo y los ingresos de las mujeres, sobre todo en empleos formales (Attanasio et al., 2011). Ninguno de estos estudios usa la ELCSA ni se refiere a Robledo, así que sirven para orientar la política, pero no prueban que funcionaría aquí.
+
+**Alcance de la evidencia.** Casi todos los estudios son transversales u observacionales y, por tanto, identifican asociaciones y no efectos causales, igual que este trabajo. La literatura respalda con más claridad la asociación con el desempleo que con la informalidad, lo que coincide con nuestros resultados para Robledo (sección 5). Por último, el módulo de la ECV difiere de la ELCSA estándar en el número de ítems y en el período de referencia, de modo que sus prevalencias no se pueden comparar directamente con las de otras encuestas (sección 3.2).
+
+# Contexto de la comuna de Robledo
+
+```{r carga-datos}
+df <- read_excel(ruta_ecv)
+df$hogar_id <- paste(df$NoForm, df$Hogar, sep = "_")
+rob <- df %>% filter(`A.7` == 7)
+n_personas <- nrow(rob)
+n_hogares <- length(unique(rob$hogar_id))
+
+# --- Indicadores de contexto (ECV 2025), todas las comunas urbanas (1 a 16) ---
+f1 <- function(x) format(round(x, 1), nsmall = 1, decimal.mark = ",")
+urb <- df %>% filter(`A.7` %in% 1:16)
+urb$menor <- urb$`B.6` < 18
+items_a <- c("O.1","O.2","O.3","O.4","O.5","O.7","O.8","O.9")
+items_n <- paste0("O.", 11:16)
+Hc <- urb %>% group_by(hogar_id) %>% mutate(tm = any(menor)) %>% ungroup() %>%
+  distinct(hogar_id, .keep_all = TRUE)
+Hc$score <- rowSums(Hc[items_a] == 1) + ifelse(Hc$tm, rowSums(Hc[items_n] == 1), 0)
+Hc$ia <- as.numeric(ifelse(Hc$tm, Hc$score >= 6, Hc$score >= 4))
+Hc$sin_alim <- as.numeric(Hc$`O.5` == 1)
+Hc$e12 <- as.numeric(Hc$`A.10` <= 2)
+Hc$arriendo <- as.numeric(Hc$`J.36` == 1)
+Jc <- urb %>% filter(`B.1` == 1) %>% select(hogar_id, com = `A.7`, FEH, h31 = `H.31`, h40 = `H.40`,
+                                              l16 = `L.16`, u2 = `U.2`, o2 = `O.2`)
+Hc <- Hc %>% transmute(hogar_id, com = `A.7`, FEH, ia, sin_alim, e12, arriendo, estrato = `A.10`) %>%
+  inner_join(Jc %>% select(-com, -FEH), by = "hogar_id")
+ocup <- Hc$h31 %in% 1:4
+Hc$des_tot  <- ifelse(Hc$h31 %in% 1:9, as.numeric(Hc$h31 == 5), NA)
+Hc$des_pea  <- ifelse(Hc$h31 %in% 1:5, as.numeric(Hc$h31 == 5), NA)
+Hc$cta_prop <- ifelse(ocup, as.numeric(Hc$h31 %in% 3:4), NA)
+Hc$sin_pres <- ifelse(ocup & Hc$h40 %in% 1:2, as.numeric(Hc$h40 == 2), NA)
+Hc$imprev   <- as.numeric(Hc$l16 == 1)
+Hc$apoyo    <- ifelse(Hc$u2 %in% 1:2, as.numeric(Hc$u2 == 1), NA)
+
+ind <- function(d, v, w) {            # % ponderado en Robledo, en el área urbana y posición (1 = más alto de 16)
+  d$v <- d[[v]]; d$w <- d[[w]]; d <- d[!is.na(d$v), ]
+  por <- sapply(split(d, d$com), function(g) 100 * weighted.mean(g$v, g$w))
+  c(rob = unname(por["7"]), urb = 100 * weighted.mean(d$v, d$w), pos = sum(por > por["7"]) + 1)
+}
+P <- urb %>% transmute(com = `A.7`, FEP,
+  no_siempre = ifelse(`C.1` %in% 1:2, as.numeric(`C.1` == 2), NA),
+  orden_pub  = as.numeric(`C.3` == 1),
+  afro       = ifelse(`B.8` > 0, as.numeric(`B.8` == 2), NA))
+K <- list(
+  ia = ind(Hc, "ia", "FEH"), sin_alim = ind(Hc, "sin_alim", "FEH"),
+  des_tot = ind(Hc, "des_tot", "FEH"), des_pea = ind(Hc, "des_pea", "FEH"),
+  cta_prop = ind(Hc, "cta_prop", "FEH"), sin_pres = ind(Hc, "sin_pres", "FEH"),
+  e12 = ind(Hc, "e12", "FEH"), arriendo = ind(Hc, "arriendo", "FEH"),
+  imprev = ind(Hc, "imprev", "FEH"), apoyo = ind(Hc, "apoyo", "FEH"),
+  no_siempre = ind(P, "no_siempre", "FEP"), orden_pub = ind(P, "orden_pub", "FEP"),
+  afro = ind(P, "afro", "FEP"))
+```
+
+La ECV 2025 recoge en Robledo `r n_personas` personas en `r n_hogares` hogares. Esta sección combina dos tipos de fuentes: documentos oficiales de planeación (el Plan de Desarrollo Local 2016-2027, de 2015, y la ficha del Departamento Administrativo de Planeación de 2021), que citamos con su año, e indicadores que calculamos con los microdatos de la ECV 2025 (hogares ponderados con el factor de expansión FEH y personas con FEP; área urbana = comunas 1 a 16). Las cifras de años distintos vienen de mediciones diferentes y no forman una serie comparable.
+
+## Territorio, población y origen
+
+Robledo es la comuna 7 de Medellín y hace parte de la zona noroccidental, junto con Castilla y Doce de Octubre. Según el Plan de Desarrollo Local, es "punto obligado de paso entre el Valle de Aburrá, los municipios del occidente antioqueño y el mar Caribe" y tiene 22 barrios, 45 sectores y 7 nodos territoriales (Alcaldía de Medellín, 2015, p. 30). Ocupa 9,46 km² y en 2020 tenía 176.810 habitantes, el 6,9% de la población de Medellín (DAP, 2021). Su poblamiento comenzó en 1880, se masificó hasta los años 1980 y se ha consolidado "a partir de la población tradicional fundadora y de la mezcla de habitantes nuevos que llegan permanentemente" (Alcaldía de Medellín, 2015, p. 32). Ese rasgo se mantiene en 2025: el `r f1(K$no_siempre["rob"])`% de las personas de Robledo no ha vivido siempre en Medellín (`r f1(K$no_siempre["urb"])`% en el área urbana) y el `r f1(K$orden_pub["rob"])`% llegó a la ciudad por razones de orden público (`r f1(K$orden_pub["urb"])`% en el área urbana); en ambos casos es la comuna con el valor más alto de las 16. Aun así, según el Plan, en el conjunto de la ciudad es "un territorio que se acerca a la media" (Alcaldía de Medellín, 2015, p. 33).
+
+## Contexto social
+
+La mayoría de los hogares de la comuna vive en estratos bajo y medio-bajo: en 2025, el `r f1(K$e12["rob"])`% de los hogares está en los estratos 1 y 2, frente al `r f1(K$e12["urb"])`% del área urbana. El promedio esconde contrastes: el Plan de Desarrollo Local describe "una gran desigualdad en la percepción de ingresos económicos" y, entre las problemáticas, el "aumento de los niveles de pobreza especialmente en la periferia de la comuna" (Alcaldía de Medellín, 2015, pp. 34-35). En el Índice Multidimensional de Condiciones de Vida, Robledo obtuvo 46,21 en 2019, frente a 49,00 de la ciudad, y fue la décima comuna urbana con mayores condiciones de vida (DAP, 2021). En vivienda, el 41% de los hogares vivía en arriendo o subarriendo en 2019 (DAP, 2021); en 2025 la proporción es del `r f1(K$arriendo["rob"])`%, frente al `r f1(K$arriendo["urb"])`% del área urbana, la posición `r K$arriendo["pos"]` entre las 16 comunas.
+
+## Contexto económico y mercado laboral
+
+La economía local gira en torno al comercio pequeño y las ventas. El diagnóstico de los líderes locales lo resume así: "Existe desempleo dentro de los habitantes de la comuna, son limitadas las oportunidades laborales, crece la economía informal y el subempleo", y "los trabajadores independientes se dedican en su mayoría a las ventas" (Alcaldía de Medellín, 2015, p. 126). Según la GEIH, en 2019 la tasa de desempleo de Robledo fue del 12%, frente al 12,2% de la ciudad, la novena comuna con mayor desempleo (DAP, 2021). En 2025, el `r f1(K$des_tot["rob"])`% de los jefes de hogar de Robledo se declara desempleado (`r f1(K$des_tot["urb"])`% en el área urbana) y, entre los jefes que participan en el mercado laboral, la proporción es del `r f1(K$des_pea["rob"])`% (`r f1(K$des_pea["urb"])`% urbano). De los jefes ocupados, el `r f1(K$cta_prop["rob"])`% trabaja por cuenta propia y el `r f1(K$sin_pres["rob"])`% no recibe prestaciones sociales (tabla siguiente). Son cifras de situación declarada en la ECV y no se pueden comparar con la tasa de la GEIH. Además, los hogares tienen poco margen ante choques: solo el `r f1(K$imprev["rob"])`% podría afrontar un gasto imprevisto con sus propios recursos (`r f1(K$imprev["urb"])`% urbano).
+
+## Inseguridad alimentaria en la comuna
+
+La planeación local ya reconoce la inseguridad alimentaria como problema: el Plan de Desarrollo Local incluye el Programa 14, Seguridad alimentaria y nutricional, articulado con ecohuertas y agricultura urbana (Alcaldía de Medellín, 2015, p. 104). En 2025, con la escala ELCSA usada en este trabajo (sección 3.2), el `r f1(K$ia["rob"])`% de los hogares de Robledo está en inseguridad alimentaria moderada o severa, frente al `r f1(K$ia["urb"])`% del área urbana, y el `r f1(K$sin_alim["rob"])`% se quedó sin alimentos por falta de dinero en los últimos 30 días (`r f1(K$sin_alim["urb"])`% urbano); Robledo ocupa el puesto `r K$ia["pos"]` de 16 en el primer indicador y el `r K$sin_alim["pos"]` en el segundo, lo que deja a la comuna cerca del promedio de la ciudad.
+
+## Contexto cultural
+
+Robledo es culturalmente diverso: "étnicamente cuenta con afrodescendientes, indígenas, raizales, mestizos, entre otros", con población "proveniente de diferentes lugares del municipio y la región, ya sea por desplazamiento voluntario o forzado" (Alcaldía de Medellín, 2015, p. 33). En 2025, el `r f1(K$afro["rob"])`% de las personas que respondieron se reconoce como negra, mulata, afrocolombiana o afrodescendiente, frente al `r f1(K$afro["urb"])`% del área urbana, la posición `r K$afro["pos"]` entre las 16 comunas. El diagnóstico del Plan señala también, entre las problemáticas, el "debilitamiento y desarticulación del tejido social" (p. 35); en 2025, el `r f1(K$apoyo["rob"])`% de los jefes de hogar afirma que podría pedir ayuda material a familiares, amigos o vecinos si lo necesitara (`r f1(K$apoyo["urb"])`% en el área urbana).
+
+```{r tabla-contexto}
+fila <- function(etq, k) c(etq, f1(K[[k]]["rob"]), f1(K[[k]]["urb"]), K[[k]]["pos"])
+tab22 <- as.data.frame(rbind(
+  fila("Hogares en inseguridad alimentaria moderada o severa (ELCSA)", "ia"),
+  fila("Hogares que se quedaron sin alimentos por falta de dinero, últimos 30 días", "sin_alim"),
+  fila("Jefes de hogar desempleados (% del total de jefes)", "des_tot"),
+  fila("Jefes desempleados (% de los jefes en el mercado laboral)", "des_pea"),
+  fila("Jefes ocupados que trabajan por cuenta propia", "cta_prop"),
+  fila("Jefes ocupados sin prestaciones sociales", "sin_pres"),
+  fila("Hogares en estratos 1 y 2", "e12"),
+  fila("Hogares en arriendo o subarriendo", "arriendo"),
+  fila("Hogares que pueden afrontar un gasto imprevisto con recursos propios", "imprev"),
+  fila("Jefes que podrían pedir ayuda material a familiares, amigos o vecinos", "apoyo"),
+  fila("Personas que no han vivido siempre en Medellín", "no_siempre"),
+  fila("Personas que llegaron a Medellín por razones de orden público", "orden_pub"),
+  fila("Personas que se reconocen negras o afrodescendientes (de quienes respondieron)", "afro")))
+kable(tab22, row.names = FALSE, col.names = c("Indicador", "Robledo (%)", "Medellín urbano (%)", "Posición de Robledo (1 = más alto, de 16)"),
+      caption = "Robledo frente al área urbana de Medellín, 2025. Fuente: cálculo propio con la ECV 2025 (hogares ponderados con FEH, personas con FEP).")
+```
+
+## Relación del contexto con el problema analizado
+
+Nuestro resultado central es que, controlando por estrato, educación, tamaño del hogar, edad y sexo del jefe, los hogares de Robledo con jefe desempleado tienen una probabilidad de inseguridad alimentaria moderada o severa unos 29 puntos porcentuales mayor que los hogares con jefe formal, mientras que la asociación del empleo informal es menor e imprecisa (sección 5). El contexto ayuda a leer este resultado, aunque no prueba causalidad.
+
+```{r tabla-desempleo-contexto}
+Hr <- Hc[Hc$com == 7, ]; des <- Hr$h31 == 5
+Hr$sin_nutr <- as.numeric(Hr$o2 == 1)
+f1u <- function(x) f1(floor(x * 10 + 0.5 + 1e-9) / 10)  # redondeo convencional (6,25 -> 6,3)
+cmp <- function(v) c(f1u(100 * mean(Hr[[v]][des], na.rm = TRUE)), f1u(100 * mean(Hr[[v]][!des], na.rm = TRUE)))
+tab23 <- data.frame(Indicador = c("Inseguridad alimentaria moderada o severa (ELCSA)",
+                                  "Se quedaron sin alimentos por falta de dinero, últimos 30 días",
+                                  "Se quedaron sin dinero para una alimentación nutritiva, últimos 30 días",
+                                  "Pueden afrontar un gasto imprevisto con recursos propios",
+                                  "El jefe podría pedir ayuda material a familiares, amigos o vecinos"),
+                    rbind(cmp("ia"), cmp("sin_alim"), cmp("sin_nutr"), cmp("imprev"), cmp("apoyo")))
+kable(tab23, row.names = FALSE,
+      col.names = c("Indicador", paste0("Jefe desempleado (", sum(des), " hogares)"), paste0("Resto de hogares (", sum(!des), ")")),
+      caption = "Hogares de Robledo según la situación laboral del jefe, 2025 (los 533 hogares de la comuna, sin restricción de edad ni de fuerza laboral; diferencias sin controles, el efecto ajustado está en la sección 5).")
+```
+
+**Una comuna cercana al promedio.** Robledo se ubica cerca de la media de la ciudad en condiciones de vida, desempleo e inseguridad alimentaria (puestos 9 a 11 de 16 en 2025). La relación entre desempleo e inseguridad alimentaria no surge, entonces, en un contexto de pobreza extrema, y eso encaja con que el coeficiente del desempleo sea positivo en 14 de las 16 comunas (sección 3.5).
+
+**Hogares que dependen del ingreso corriente.** La economía de Robledo descansa en el comercio pequeño y las ventas, y el diagnóstico del Plan identifica el "bajo nivel de ingresos y dependencia económica de los hogares" (Alcaldía de Medellín, 2015, p. 127). Con poco ahorro (solo el `r f1(K$imprev["rob"])`% podría cubrir un gasto imprevisto) y con cerca de la mitad de los hogares pagando arriendo, es plausible que perder el empleo obligue al hogar a recortar en alimentación, el gasto más flexible. Los datos son coherentes con ese mecanismo, aunque no permiten probarlo: entre los hogares con jefe desempleado, solo el `r tab23[4, 2]`% podría afrontar un gasto imprevisto, la mitad se quedó sin alimentos por falta de dinero en el último mes y el `r tab23[1, 2]`% está en inseguridad alimentaria moderada o severa, frente al `r tab23[1, 3]`% del resto.
+
+**Desempleo e informalidad no son lo mismo.** La mitad de los jefes ocupados trabaja por cuenta propia, y el diagnóstico del Plan indica que lo hacen sobre todo en ventas. Una lectura posible es que el trabajo por cuenta propia, aunque precario, mantiene un flujo diario de ingreso que el desempleo corta; eso encaja con que la informalidad tenga una asociación positiva pero imprecisa con la inseguridad (sección 4.5), aunque los datos no permiten comprobar el mecanismo.
+
+**Estrato, redes y jefatura femenina.** En 2025, el `r f1(100 * mean(Hr$ia[Hr$estrato <= 2]))`% de los hogares de estratos 1 y 2 está en inseguridad alimentaria moderada o severa, frente al `r f1(100 * mean(Hr$ia[Hr$estrato >= 3]))`% de los de estratos 3 o más, lo que concuerda con que el estrato sea, junto con el desempleo del jefe, uno de los dos regresores más significativos del modelo. Tampoco detectamos que la asociación del desempleo varíe con el estrato, aunque con poca potencia estadística (sección 4.5). Los jefes desempleados reportan con menos frecuencia que podrían pedir ayuda material (`r tab23[5, 2]`% frente a `r tab23[5, 3]`%; diferencia descriptiva, sin prueba de significancia), lo que podría indicar redes más débiles en una comuna con tanta migración. Por último, el 45,48% de los hogares de Robledo tenía jefatura femenina en 2018 (DAP, 2021), pero en el modelo su coeficiente es positivo y no significativo (sección 5), así que lo tratamos como indicio y no como resultado.
+
+# Datos y estadísticas descriptivas
+
+## Fuente y diseño muestral
+
+La fuente de datos es la ECV de Medellín 2025 (Alcaldía de Medellín, Departamento Administrativo de Planeación, 2025): microdatos a nivel de persona y hogar, con 20.408 personas y 6.955 hogares en la muestra total de la ciudad. Según la ficha técnica, el diseño muestral es un Muestreo Aleatorio Simple (MAS) para proporciones, que tiene en cuenta la participación de las viviendas según estrato, comuna y corregimiento. El error de estimación es del 1,6% con un nivel de confianza del 99,0%, y esas cifras valen para el conjunto de la muestra municipal, no para cada comuna por separado. La encuesta busca ser representativa para las 16 comunas y los 5 corregimientos. La encuesta se levanta anualmente, durante el segundo semestre del año.
+
+**Nota metodológica sobre factores de expansión**: la base de microdatos incluye los factores de expansión FEV (viviendas), FEH (hogares) y FEP (personas), pensados para producir estimaciones a nivel de ciudad o para comparar comunas entre sí. Aquí no los aplicamos, porque dentro de una misma comuna el factor de expansión de hogares (FEH) es constante: en Robledo toma un único valor para todos los hogares (la muestra es autoponderada dentro de la comuna) y ponderar no cambia las estimaciones. Lo verificamos en la sección 4.6, donde el logit ponderado reproduce exactamente los coeficientes del modelo principal. Los factores serían indispensables para comparar Robledo con otras comunas o para estimar totales de ciudad, algo que este trabajo no hace.
+
+
+
+## Construcción de la variable dependiente: inseguridad alimentaria (ELCSA)
+
+Aproximamos la inseguridad alimentaria del hogar (*y*) con las preguntas de la Escala Latinoamericana y Caribeña de Seguridad Alimentaria (ELCSA) que incluye el módulo `O` de la ECV, y la clasificamos con los puntos de corte del manual de la FAO (2012). En concreto:
+
+- **Preguntas usadas (14):** 8 ítems para todos los hogares (`O.1` a `O.5` y `O.7` a `O.9`) y 6 ítems adicionales para los hogares con al menos un menor de 18 años (`O.11` a `O.16`).
+- **Puntaje:** número de respuestas afirmativas entre los ítems que aplican al hogar.
+- **Clasificación:** el hogar está en inseguridad alimentaria moderada o severa (*y* = 1) si el puntaje es de 6 o más puntos con menores, o de 4 o más sin menores; en otro caso, *y* = 0 (seguridad o inseguridad leve). La separación entre moderada y severa que muestra la tabla siguiente es solo descriptiva y no entra al modelo.
+
+**Limitaciones de esta aproximación.** El módulo de la ECV no coincide exactamente con la ELCSA estándar, que tiene 15 ítems (8 para adultos y 7 para menores), y la ficha técnica no publica puntos de corte propios. Por eso nuestra medición es una aproximación y no una clasificación oficial. Hay tres diferencias. (i) El módulo tiene 16 ítems y usamos 14: dejamos por fuera `O.6` (consumo de proteína animal) y `O.10` (un adulto que se acostó con hambre), que no hacen parte del estándar. (ii) Para hogares con menores la ECV trae 6 ítems en vez de 7, así que ajustamos el límite entre moderada y severa: 6 a 9 y 10 o más, en vez de 6 a 10 y 11 o más. El corte de *y* (6 o más con menores, 4 o más sin menores) sí coincide con el del estándar. (iii) La ECV pregunta por los últimos 30 días, mientras que el Anexo 6.18 de la Alcaldía (Alcaldía de Medellín, 2025) describe la escala con un período de 3 meses; por eso la prevalencia estimada no es directamente comparable con la de otras fuentes. Como todos los hogares de la muestra responden las mismas preguntas, estas diferencias no deberían afectar la comparación entre grupos.
+
+```{r elcsa}
+rob$menor18 <- rob$`B.6` < 18
+hog_menor <- rob %>% group_by(hogar_id) %>%
+  summarise(tiene_menor = any(menor18, na.rm = TRUE))
+
+adult_items <- c("O.1","O.2","O.3","O.4","O.5","O.7","O.8","O.9")
+child_items <- c("O.11","O.12","O.13","O.14","O.15","O.16")
+
+hog <- rob %>% distinct(hogar_id, .keep_all = TRUE) %>%
+  left_join(hog_menor, by = "hogar_id")
+
+elcsa_score <- function(row, tiene_menor) {
+  s <- sum(row[adult_items] == 1, na.rm = TRUE)
+  if (isTRUE(tiene_menor)) s <- s + sum(row[child_items] == 1, na.rm = TRUE)
+  s
+}
+hog$elcsa_score <- mapply(function(i) elcsa_score(hog[i, ], hog$tiene_menor[i]),
+                           seq_len(nrow(hog)))
+
+elcsa_clasifica <- function(s, tiene_menor) {
+  if (isTRUE(tiene_menor)) {
+    if (s == 0) "Seguridad" else if (s <= 5) "Leve"
+    else if (s <= 9) "Moderada" else "Severa"
+  } else {
+    if (s == 0) "Seguridad" else if (s <= 3) "Leve"
+    else if (s <= 6) "Moderada" else "Severa"
+  }
+}
+hog$score_ad <- rowSums(hog[, adult_items] == 1, na.rm = TRUE)
+hog$elcsa_clas <- mapply(elcsa_clasifica, hog$elcsa_score, hog$tiene_menor)
+hog$elcsa_clas <- factor(hog$elcsa_clas,
+                          levels = c("Seguridad","Leve","Moderada","Severa"))
+hog$insegura_mod_severa <- hog$elcsa_clas %in% c("Moderada","Severa")
+```
+
+```{r elcsa-tabla, echo=FALSE}
+tab_elcsa <- hog %>% count(elcsa_clas) %>%
+  mutate(pct = round(100 * n / sum(n), 1))
+kable(tab_elcsa, col.names = c("Categoría ELCSA", "Hogares", "%"),
+      caption = "Distribución de inseguridad alimentaria en los hogares de Robledo")
+```
+
+```{r elcsa-grafico, echo=FALSE, fig.height=3, fig.cap="Distribución de la inseguridad alimentaria en Robledo"}
+ggplot(tab_elcsa, aes(x = elcsa_clas, y = n, fill = elcsa_clas)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = paste0(format(pct, decimal.mark = ","), "%")), vjust = -0.5, size = 3.5) +
+  scale_fill_manual(values = c("Seguridad" = "#2a78d6", "Leve" = "#eda100",
+                                "Moderada" = "#eb6834", "Severa" = "#d03b3b")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  labs(x = NULL, y = "Hogares", title = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.x = element_blank())
+```
+
+El `r round(mean(hog$insegura_mod_severa)*100,1)`% de los hogares de la muestra en Robledo está en inseguridad alimentaria moderada o severa. Esta es la variable binaria *y* que se usa en el modelo: `y = 1` si el hogar está en inseguridad moderada o severa, `y = 0` si está en seguridad o inseguridad leve.
+
+## Muestra, variable independiente y controles
+
+La variable *x* es la **situación laboral del jefe de hogar** (`B.1 == 1`). La construimos con la situación de actividad (`H.31`) y el pago de prestaciones sociales (`H.40`), en tres categorías mutuamente excluyentes: (i) **formal**, asalariado de tiempo completo o parcial con prestaciones sociales (categoría de referencia); (ii) **informal**, asalariado sin prestaciones sociales o trabajador por cuenta propia (`H.31` = 3 o 4, "incluida ayuda familiar" según el diccionario de datos); y (iii) **desempleado** (`H.31` = 5). La informalidad la aproximamos por la ausencia de prestaciones y por el trabajo independiente, no por el registro del negocio, que la ECV no permite identificar.
+
+**Muestra.** El ingreso del hogar condiciona el acceso económico a los alimentos (FAO, 2011, p. 1), y el ingreso laboral del jefe es el que varía entre las categorías anteriores. Por eso limitamos el análisis a hogares cuyo jefe está en la fuerza laboral (ocupado o desempleado) y en edad laboral (15 a 64 años). Excluimos a los jefes inactivos (jubilados, incapacitados, estudiantes y personas dedicadas a las labores del hogar), porque su ingreso viene de otras fuentes y su perfil es distinto. La muestra se reduce, pero queda más homogénea y con menos categorías que interpretar. A cambio, los resultados valen solo para hogares con jefe en la fuerza laboral, no para todos los de Robledo. El orden fue este: definir la muestra, construir las variables, eliminar los datos faltantes y comprobar que el número de observaciones del modelo coincide con el de la base depurada (tabla siguiente).
+
+Los controles son el estrato socioeconómico (`A.10`), el tamaño del hogar (`A.14`), la edad del jefe (`B.6`), su sexo al nacer (`B.2`, dummy de jefatura femenina) y su nivel educativo (`E.6`). El nivel educativo va en una escala ordinal de 0 = Ninguno a 10 = Doctorado. El código 11, "Educación no formal", no es un nivel más alto de esa escala, así que lo tratamos como dato faltante, igual que "no sabe/no responde". No incluimos el ingreso ni el gasto del hogar en el modelo principal porque son mediadores: perder el empleo reduce el ingreso, y se espera que por esa vía afecte la alimentación. Controlar por ellos absorbería parte del efecto que nos interesa. La ECV sí contiene variables de este tipo: ingresos laborales del jefe en 2024 (`H.2B` y `H.3B`, solo para quienes los reportan), gasto mensual total del hogar (`K.11`), dificultad para llegar a fin de mes (`L.2`), redes de apoyo (`U.2`) y asistencia social recibida (`H.27`). La sección 4.5 reestima el modelo con el gasto, la dificultad para llegar a fin de mes, las redes de apoyo y la asistencia social, para verificar que el resultado no depende de esta decisión. El ingreso laboral del jefe no se agrega porque solo está disponible para quienes lo reportan.
+
+```{r construccion-x}
+jefes <- rob %>% filter(`B.1` == 1)
+
+# Situación laboral del jefe. NA = "no sabe/no responde" en H.31 o en H.40 (asalariados);
+# se deja como NA para no asumir por defecto que es empleo formal.
+jefes$grupo_lab <- NA_character_
+jefes$grupo_lab[jefes$`H.31` == 5] <- "Desempleado"
+jefes$grupo_lab[jefes$`H.31` %in% c(3, 4)] <- "Informal"                              # cuenta propia
+jefes$grupo_lab[jefes$`H.31` %in% c(1, 2) & jefes$`H.40` == 2] <- "Informal"          # asalariado sin prestaciones
+jefes$grupo_lab[jefes$`H.31` %in% c(1, 2) & jefes$`H.40` == 1] <- "Formal"            # asalariado con prestaciones
+jefes$grupo_lab[jefes$`H.31` %in% c(6, 7, 8, 9)] <- "No activo"                       # fuera de la fuerza laboral
+
+base0 <- hog %>%
+  select(hogar_id, insegura_mod_severa, elcsa_score, score_ad, elcsa_clas, tiene_menor) %>%
+  inner_join(
+    jefes %>% select(hogar_id, grupo_lab, estrato = `A.10`,
+                      tam_hogar = `A.14`, edad_jefe = `B.6`,
+                      sexo_jefe = `B.2`, educ_jefe = `E.6`,
+                      situacion = `H.31`, prestaciones = `H.40`, feh = FEH),
+    by = "hogar_id"
+  )
+# E.6 usa -98/-99 como "no sabe"/"no responde"; el código 11 es "Educación no formal"
+base0$educ_jefe[base0$educ_jefe < 0 | base0$educ_jefe == 11] <- NA
+
+# Definición de la muestra (en este orden) y conteo de hogares que salen en cada paso
+n_jefe <- nrow(base0)
+s1 <- base0 %>% filter(is.na(grupo_lab) | grupo_lab != "No activo")        # fuerza laboral
+s2 <- s1 %>% filter(edad_jefe >= 15, edad_jefe <= 64)                      # edad laboral
+s3 <- s2 %>% filter(!is.na(grupo_lab), !is.na(educ_jefe))                  # sin datos faltantes
+n_noact <- n_jefe - nrow(s1); n_edad <- nrow(s1) - nrow(s2); n_miss <- nrow(s2) - nrow(s3)
+base <- s3
+
+# Construcción de las variables del modelo
+base$y <- as.integer(base$insegura_mod_severa)
+base$sexo_jefe_mujer <- as.integer(base$sexo_jefe == 2)
+base$cat_lab <- factor(base$grupo_lab, levels = c("Formal", "Informal", "Desempleado"))
+stopifnot(!anyNA(base[, c("y", "cat_lab", "estrato", "tam_hogar", "edad_jefe",
+                           "sexo_jefe_mujer", "educ_jefe")]))
+stopifnot(nrow(base) == n_jefe - n_edad - n_noact - n_miss)
+tab_cat <- table(base$cat_lab)
+
+flujo <- data.frame(
+  Paso = c("Hogares de Robledo en la ECV 2025", "Hogares sin jefe de hogar identificado",
+           "Jefe fuera de la fuerza laboral (inactivo)", "Jefe fuera de la edad laboral (menor de 15 o mayor de 64 años)",
+           "Datos faltantes (situación laboral o educación)",
+           "Muestra final (N de la regresión)"),
+  Hogares = c(n_hogares, -(n_hogares - n_jefe), -n_noact, -n_edad, -n_miss, nrow(base)))
+kable(flujo, format.args = list(big.mark = "."), caption = "Construcción de la muestra de análisis")
+```
+
+Los `r n_hogares` hogares de Robledo se reducen a `r nrow(base)` hogares en la muestra final (`r n_noact` salen por tener un jefe inactivo, `r n_edad` por tener un jefe fuera de los 15 a 64 años y `r n_miss` por datos faltantes); ese es el N con el que se estima el modelo (se verifica en la sección 4.2). Ningún jefe de Robledo tiene menos de 15 años, la edad mínima de admisión al trabajo en Colombia (Ley 1098 de 2006, art. 35); el más joven tiene `r min(base0$edad_jefe)`, de modo que el filtro de edad elimina solo a los jefes de 65 años o más. El tope de 64 años es una decisión del grupo, no una norma: corresponde a la ventana de edad de trabajar que suele usarse en estadística laboral, y la sección 4.5 muestra el resultado sin ese tope.
+
+```{r descriptivas, echo=FALSE}
+desc <- base %>% summarise(
+  `% y=1 (inseguridad mod/severa)` = round(mean(y)*100,1),
+  `% jefe informal` = round(mean(cat_lab == "Informal")*100,1),
+  `% jefe desempleado` = round(mean(cat_lab == "Desempleado")*100,1),
+  `Estrato promedio` = round(mean(estrato),2),
+  `Tamaño hogar promedio` = round(mean(tam_hogar),2),
+  `Edad jefe promedio` = round(mean(edad_jefe),1),
+  `% jefatura femenina` = round(mean(sexo_jefe_mujer)*100,1),
+  `Educación jefe promedio (nivel)` = round(mean(educ_jefe),2)
+)
+dec <- c(1, 1, 1, 2, 2, 1, 1, 2)
+desc_vis <- data.frame(Valor = mapply(function(v, d) format(round(v, d), nsmall = d, decimal.mark = ","),
+                                      unlist(desc), dec), row.names = names(desc))
+kable(desc_vis, caption = "Estadísticas descriptivas, hogares de la muestra final", align = "r")
+```
+
+El porcentaje de hogares en inseguridad moderada o severa en la muestra final es de `r round(mean(base$y)*100,1)`%, frente a `r round(mean(hog$insegura_mod_severa)*100,1)`% en los `r nrow(hog)` hogares de Robledo de la sección anterior; el nivel general casi no cambia al excluir a los hogares con jefe inactivo.
+
+```{r tabla-categorias, echo=FALSE}
+n_cp <- sum(base$situacion %in% c(3, 4)); n_asal_sp <- sum(base$situacion %in% c(1, 2) & base$prestaciones == 2)
+n_cp_con <- sum(base$situacion %in% c(3, 4) & base$prestaciones == 1, na.rm = TRUE)
+n_cp_sin <- sum(base$situacion %in% c(3, 4) & base$prestaciones == 2, na.rm = TRUE)
+tab_lab <- base %>% group_by(cat_lab) %>%
+  summarise(Hogares = n(),
+            `% inseguridad mod/severa` = round(100 * mean(y), 1),
+            `Edad promedio` = round(mean(edad_jefe), 1),
+            `% jefatura femenina` = round(100 * mean(sexo_jefe_mujer), 1),
+            .groups = "drop")
+kable(tab_lab, col.names = c("Situación laboral del jefe", "Hogares", "% inseguridad mod/severa",
+                              "Edad promedio", "% jefatura femenina"),
+      caption = "Inseguridad alimentaria y perfil del jefe, por situación laboral (muestra final)")
+```
+
+**Tamaño de los grupos.** El grupo de referencia (formal) tiene `r tab_cat["Formal"]` hogares, el informal `r tab_cat["Informal"]` (`r n_cp` por cuenta propia y `r n_asal_sp` asalariados sin prestaciones) y el desempleado `r tab_cat["Desempleado"]`. Agrupar a los asalariados sin prestaciones con los trabajadores por cuenta propia evita una categoría de muy pocos hogares. La categoría informal sigue siendo heterogénea: de los `r n_cp` jefes por cuenta propia, `r n_cp_sin` no pagan prestaciones sociales y `r n_cp_con` sí las pagan (`H.40`).
+
+## Relación entre *y* y *x* dentro de Robledo
+
+Antes del modelo multivariado miramos la relación bivariada dentro de Robledo. La tabla anterior ya muestra la tasa de inseguridad por situación laboral. La siguiente prueba chi-cuadrado evalúa si la situación laboral y la inseguridad alimentaria están asociadas, y se presenta también la tasa de inseguridad por situación laboral en estratos bajos y altos.
+
+```{r cruce-yx, echo=FALSE}
+chi_cat <- chisq.test(table(base$cat_lab, base$y))
+
+base$grupo_estrato <- ifelse(base$estrato <= 2, "Estratos 1-2", "Estratos 3 o más")
+celda_estrato <- function(grupo) {
+  d <- base[base$grupo_estrato == grupo, ]
+  sapply(levels(base$cat_lab), function(k) {
+    s <- d[d$cat_lab == k, ]
+    paste0(format(round(100 * mean(s$y), 1), nsmall = 1, decimal.mark = ","), "% (n = ", nrow(s), ")")
+  })
+}
+tab_cat_estr <- data.frame(cat_lab = levels(base$cat_lab),
+                           bajo = celda_estrato("Estratos 1-2"),
+                           alto = celda_estrato("Estratos 3 o más"))
+rownames(tab_cat_estr) <- NULL
+kable(tab_cat_estr, col.names = c("Situación laboral del jefe", "Estratos 1-2", "Estratos 3 o más"),
+      caption = "Inseguridad alimentaria por situación laboral, en estratos bajos y altos (celdas con pocos hogares: interpretar con cautela)")
+```
+
+La prueba chi-cuadrado `r ifelse(chi_cat$p.value < 0.05, "rechaza", "no rechaza")` la independencia entre situación laboral e inseguridad (valor-p `r ifelse(chi_cat$p.value < 0.001, "< 0,001", paste0("= ", format(round(chi_cat$p.value, 3), decimal.mark = ",")))`). La inseguridad es mayor entre los jefes desempleados que entre los formales en ambos grupos de estrato; en los estratos altos hay pocos hogares por celda (`r sum(base$cat_lab == "Desempleado" & base$estrato >= 3)` desempleados), por lo que esa comparación tiene poca potencia.
+
+## Selección de la comuna: comparación entre comunas
+
+Elegimos Robledo después de explorar la relación bivariada entre inseguridad alimentaria y varias definiciones candidatas de *x* en las 16 comunas urbanas de Medellín (situación laboral, ingreso del jefe menor a un salario mínimo, estrato bajo y alta dependencia demográfica), sin corrección por el número de comunas y definiciones probadas. Para que el lector juzgue qué tan típico es el resultado de Robledo, la tabla siguiente estima, en cada comuna, el mismo logit de la sección 4 (jefes formales, informales y desempleados de 15 a 64 años, mismos controles). Es un ejercicio descriptivo y se calcula con el mismo código que corre el resto del documento.
+
+```{r coef-comunas, echo=FALSE}
+comunas_robustez <- c("Popular" = 1, "Santa Cruz" = 2, "Manrique" = 3, "Aranjuez" = 4,
+                       "Castilla" = 5, "Doce de Octubre" = 6, "Robledo" = 7,
+                       "Villa Hermosa" = 8, "Buenos Aires" = 9, "La Candelaria" = 10,
+                       "Laureles-Estadio" = 11, "La América" = 12, "San Javier" = 13,
+                       "El Poblado" = 14, "Guayabal" = 15, "Belén" = 16)
+
+coef_comuna <- function(codigo) {
+  com <- df %>% filter(`A.7` == codigo)
+  com$menor18 <- com$`B.6` < 18
+  hm <- com %>% group_by(hogar_id) %>%
+    summarise(tiene_menor = any(menor18, na.rm = TRUE), .groups = "drop")
+  hc <- com %>% distinct(hogar_id, .keep_all = TRUE) %>% left_join(hm, by = "hogar_id")
+  hc$score <- mapply(function(i) elcsa_score(hc[i, ], hc$tiene_menor[i]), seq_len(nrow(hc)))
+  hc$y <- as.integer(ifelse(hc$tiene_menor, hc$score >= 6, hc$score >= 4))
+  jf <- com %>% filter(`B.1` == 1, `B.6` >= 15, `B.6` <= 64)
+  jf$g <- NA_character_
+  jf$g[jf$`H.31` == 5] <- "Desempleado"
+  jf$g[jf$`H.31` %in% c(3, 4)] <- "Informal"
+  jf$g[jf$`H.31` %in% c(1, 2) & jf$`H.40` == 2] <- "Informal"
+  jf$g[jf$`H.31` %in% c(1, 2) & jf$`H.40` == 1] <- "Formal"
+  b <- hc %>% select(hogar_id, y) %>%
+    inner_join(jf %>% transmute(hogar_id, g, estrato = `A.10`, tam = `A.14`, edad = `B.6`,
+                                muj = as.integer(`B.2` == 2), educ = `E.6`), by = "hogar_id") %>%
+    filter(!is.na(g), !is.na(educ), educ >= 0, educ != 11)
+  b$g <- factor(b$g, levels = c("Formal", "Informal", "Desempleado"))
+  tryCatch({
+    s <- summary(glm(y ~ g + estrato + tam + edad + muj + educ, data = b, family = binomial))$coefficients
+    c(N = nrow(b), Coef_inf = round(s["gInformal", 1], 2), p_inf = round(s["gInformal", 4], 3),
+      n_des = sum(b$g == "Desempleado"), Coef_des = round(s["gDesempleado", 1], 2),
+      p_des = round(s["gDesempleado", 4], 3))
+  }, error = function(e) c(N = nrow(b), rep(NA_real_, 5)))
+}
+tab_coef_com <- as.data.frame(t(sapply(comunas_robustez, coef_comuna)))
+tab_coef_com <- cbind(Comuna = paste0(names(comunas_robustez), " (", comunas_robustez, ")"), tab_coef_com)
+colnames(tab_coef_com) <- c("Comuna", "Hogares en el modelo", "Coef. informal", "p", "Jefes desempleados", "Coef. desempleado", "p ")
+rownames(tab_coef_com) <- NULL
+fp_tab <- function(p) ifelse(is.na(p), "", ifelse(p < 0.001, "<0,001", format(round(p, 3), decimal.mark = ",")))
+tab_coef_vis <- tab_coef_com
+tab_coef_vis[, 4] <- fp_tab(tab_coef_com[, 4]); tab_coef_vis[, 7] <- fp_tab(tab_coef_com[, 7])
+kable(tab_coef_vis, caption = "Coeficientes (logit) de las categorías informal y desempleado frente a formal, por comuna (mismos controles)")
+rob_fila <- tab_coef_com$Comuna == "Robledo (7)"
+coef_inf_rob <- tab_coef_com[rob_fila, 3]; coef_des_rob <- tab_coef_com[rob_fila, 6]
+n_inf_pos <- sum(tab_coef_com[, 3] > 0, na.rm = TRUE)
+n_inf_sig <- sum(tab_coef_com[, 3] > 0 & tab_coef_com[, 4] < 0.05, na.rm = TRUE)
+n_des_pos <- sum(tab_coef_com[, 6] > 0, na.rm = TRUE)
+n_des_sig <- sum(tab_coef_com[, 6] > 0 & tab_coef_com[, 7] < 0.05, na.rm = TRUE)
+n_mayor_des <- sum(tab_coef_com[, 6] > coef_des_rob, na.rm = TRUE)
+```
+
+El coeficiente del desempleo es positivo en `r n_des_pos` de las 16 comunas y estadísticamente significativo al 5% en `r n_des_sig`; en Robledo vale `r coef_des_rob`, y `r n_mayor_des` comunas tienen un coeficiente mayor. El de la categoría informal es positivo en `r n_inf_pos` comunas y significativo en `r n_inf_sig`; en Robledo vale `r coef_inf_rob`. El resultado de Robledo es, entonces, típico y no excepcional, lo que sirve como chequeo de validez externa, pero no como prueba de causalidad. Elegimos Robledo por su tamaño de muestra y por criterios prácticos del grupo (por ejemplo, la viabilidad del trabajo de campo), no porque muestre la asociación más fuerte; aun así, no podemos descartar cierto sesgo de selección por haber mirado estos resultados antes de elegir.
+
+# Modelo econométrico
+
+## Modelo de elección discreta
+
+La variable dependiente *y* es binaria (1 = inseguridad alimentaria moderada o severa), de modo que se modela la probabilidad de que el hogar *i* esté en inseguridad dado un vector de características $\mathbf{x}_i$:
+
+$$P(y_i=1\mid \mathbf{x}_i) = G(\beta_0 + \mathbf{x}_i'\boldsymbol\beta)$$
+
+donde $G$ es una función de distribución acumulada, que toma valores estrictamente entre 0 y 1, a diferencia del modelo de probabilidad lineal (Wooldridge, 2013, sección 7.5; Gujarati y Porter, 2010, cap. 15; García, 2026). En el modelo **logit**, $G(z) = \Lambda(z) = \dfrac{\exp(z)}{1+\exp(z)}$, la distribución logística. En el modelo **probit**, $G(z) = \Phi(z)$, la normal estándar. Ambos se derivan de un modelo de variable latente $y_i^* = \beta_0 + \mathbf{x}_i'\boldsymbol\beta + e_i$, con $y_i = 1$ si $y_i^*>0$, y se estiman por máxima verosimilitud.
+
+No usamos variables instrumentales (IV). La ECV no trae un instrumento creíble para la situación laboral del jefe, es decir, una variable que afecte el empleo del jefe pero no la alimentación del hogar por otra vía, y los instrumentos habituales, como los choques de demanda laboral locales, no están en la encuesta. Por eso recurrimos al modelo de elección discreta que permite el reto, e interpretamos los resultados como asociaciones condicionales y no como efectos causales (ver limitaciones en la sección 6).
+
+## Especificación
+
+Se estiman dos modelos, idénticos salvo por la función $G$ (logit o probit):
+
+$$P(y_i=1\mid \mathbf{x}_i) = G\big(\beta_0 + \gamma_1\,\text{Informal}_i + \gamma_2\,\text{Desempleado}_i + \beta_1\,\text{Estrato}_i + \beta_2\,\text{TamHogar}_i + \beta_3\,\text{Edad}_i + \beta_4\,\text{JefaMujer}_i + \beta_5\,\text{Educ}_i\big)$$
+
+donde $\text{Informal}_i$ y $\text{Desempleado}_i$ son variables dummy que valen 1 si el jefe del hogar $i$ está en esa situación laboral y 0 en otro caso (la categoría de referencia es el jefe formal), y los demás términos son los controles descritos en la sección 3.3. La hipótesis de interés es que $\gamma_1 > 0$ y $\gamma_2 > 0$: frente a un jefe formal, un jefe informal o desempleado aumenta la probabilidad de inseguridad alimentaria del hogar. Las pruebas de significancia que se reportan son de dos colas.
+
+```{r modelos}
+logit <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+             data = base, family = binomial(link = "logit"))
+probit <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+              data = base, family = binomial(link = "probit"))
+# El N de la regresión debe coincidir con el de la base depurada
+stopifnot(nobs(logit) == nrow(base), nobs(probit) == nrow(base))
+```
+
+Las regresiones se estiman con `r nobs(logit)` hogares, el mismo N de la muestra final de la tabla de construcción de la muestra (sección 3.3).
+
+```{r tabla-coeficientes, echo=FALSE}
+etq <- function(x) {
+  m <- c("(Intercept)" = "Constante", cat_labInformal = "Jefe informal (vs. formal)",
+         cat_labDesempleado = "Jefe desempleado (vs. formal)", estrato = "Estrato",
+         tam_hogar = "Tamaño del hogar", edad_jefe = "Edad del jefe", sexo_jefe_mujer = "Jefatura femenina",
+         educ_jefe = "Educación del jefe (nivel)", cat_lab = "Situación laboral del jefe")
+  unname(ifelse(x %in% names(m), m[x], x))
+}
+coef_tab <- data.frame(
+  Variable = etq(names(coef(logit))),
+  Logit = round(coef(logit), 4),
+  `p-valor (logit)` = round(summary(logit)$coefficients[,4], 4),
+  Probit = round(coef(probit), 4),
+  `p-valor (probit)` = round(summary(probit)$coefficients[,4], 4),
+  check.names = FALSE
+)
+rownames(coef_tab) <- NULL
+kable(coef_tab, caption = "Coeficientes estimados, logit y probit")
+```
+
+## Efectos marginales
+
+Los coeficientes de logit y probit no son directamente interpretables como efectos sobre la probabilidad, por la no linealidad de $G(\cdot)$. Se calcula el **efecto parcial promedio** (average partial effect), que promedia el efecto parcial individual de cada observación a través de toda la muestra: para una variable continua, $n^{-1}\sum_i g(\hat\beta_0 + \mathbf{x}_i\hat{\boldsymbol\beta})\hat\beta_j$, donde $g(\cdot)$ es la función de densidad asociada a $G(\cdot)$; para una variable discreta (la jefatura femenina o cada categoría laboral frente a la de referencia), el promedio de la diferencia de probabilidades predichas al pasar la variable de la categoría de referencia a la categoría de interés, evaluado en cada observación. Los efectos marginales se interpretan en **puntos porcentuales**, no en porcentajes.
+
+```{r efectos-marginales}
+calcular_ape <- function(modelo, datos, dist = "logit") {
+  xb <- predict(modelo, type = "link")
+  dens <- if (dist == "logit") dlogis(xb) else dnorm(xb)
+  betas <- coef(modelo)
+  vars <- names(betas)[names(betas) != "(Intercept)"]
+  niveles <- levels(datos$cat_lab)
+  ref <- niveles[1]
+
+  sapply(vars, function(v) {
+    if (startsWith(v, "cat_lab")) {
+      # efecto discreto: de la categoría de referencia (Formal) a la categoría de interés
+      lev <- substring(v, nchar("cat_lab") + 1)
+      d1 <- datos; d1$cat_lab <- factor(lev, levels = niveles)
+      d0 <- datos; d0$cat_lab <- factor(ref, levels = niveles)
+      mean(predict(modelo, newdata = d1, type = "response") -
+             predict(modelo, newdata = d0, type = "response"))
+    } else if (v == "sexo_jefe_mujer") {
+      d1 <- datos; d1[[v]] <- 1
+      d0 <- datos; d0[[v]] <- 0
+      mean(predict(modelo, newdata = d1, type = "response") -
+             predict(modelo, newdata = d0, type = "response"))
+    } else {
+      mean(dens) * betas[[v]]
+    }
+  })
+}
+
+ame_logit <- calcular_ape(logit, base, "logit")
+ame_probit <- calcular_ape(probit, base, "probit")
+```
+
+```{r tabla-efectos, echo=FALSE}
+tab_ame <- data.frame(
+  Variable = etq(names(ame_logit)),
+  `Efecto marginal Logit (pp)` = round(ame_logit * 100, 2),
+  `Efecto marginal Probit (pp)` = round(ame_probit * 100, 2),
+  check.names = FALSE
+)
+knitr::asis_output("\\needspace{12\\baselineskip}")
+kable(tab_ame, row.names = FALSE, caption = "Efectos parciales promedio (en puntos porcentuales)")
+```
+
+Como las categorías laborales tienen pocos hogares, las estimaciones puntuales deben leerse junto con sus intervalos de confianza. La tabla siguiente reporta los coeficientes del logit con su intervalo de Wald al 95% y el intervalo de los efectos parciales promedio obtenido por *bootstrap* (500 remuestreos de hogares, semilla fija).
+
+```{r intervalos, echo=FALSE}
+ic <- confint.default(logit)
+tab_ic <- data.frame(Variable = rownames(ic), Etiqueta = etq(rownames(ic)), Coef = round(coef(logit), 3),
+                     `IC 95% inferior` = round(ic[, 1], 3), `IC 95% superior` = round(ic[, 2], 3),
+                     check.names = FALSE)
+tab_ic <- tab_ic[tab_ic$Variable != "(Intercept)", ]
+tab_ic$Variable <- tab_ic$Etiqueta; tab_ic$Etiqueta <- NULL
+kable(tab_ic, row.names = FALSE, caption = "Coeficientes del logit con intervalo de confianza de Wald al 95%")
+
+set.seed(2025)
+B <- 500
+boot_ape <- replicate(B, {
+  bs <- base[sample(nrow(base), replace = TRUE), ]
+  m <- try(glm(formula(logit), data = bs, family = binomial(link = "logit")), silent = TRUE)
+  if (inherits(m, "try-error")) rep(NA_real_, length(ame_logit))
+  else tryCatch(calcular_ape(m, bs, "logit"), error = function(e) rep(NA_real_, length(ame_logit)))
+})
+ic_ape <- t(apply(boot_ape, 1, quantile, probs = c(0.025, 0.975), na.rm = TRUE)) * 100
+tab_ic_ape <- data.frame(Variable = etq(names(ame_logit)), `APE (pp)` = round(ame_logit * 100, 1),
+                         `IC 95% inferior` = round(ic_ape[, 1], 1), `IC 95% superior` = round(ic_ape[, 2], 1),
+                         check.names = FALSE)
+kable(tab_ic_ape, row.names = FALSE, caption = "Efectos parciales promedio (pp) con intervalo bootstrap al 95%")
+ape_des_ic <- ic_ape["cat_labDesempleado", ]
+```
+
+El intervalo del efecto parcial del desempleo va de `r round(ape_des_ic[1],1)` a `r round(ape_des_ic[2],1)` puntos porcentuales: el efecto es positivo con claridad, pero su magnitud es incierta.
+
+## Bondad de ajuste
+
+```{r bondad-ajuste, echo=FALSE}
+pseudo_r2 <- function(modelo) {
+  1 - modelo$deviance / modelo$null.deviance
+}
+r2_logit <- pseudo_r2(logit)
+r2_probit <- pseudo_r2(probit)
+```
+
+El pseudo $R^2$ de McFadden es `r round(r2_logit,3)` para el logit y `r round(r2_probit,3)` para el probit. La prueba de razón de verosimilitud (comparando contra el modelo nulo) es significativa en ambos casos (p < 0,001), indicando que el conjunto de regresores aporta poder explicativo.
+
+```{r tabla-clasificacion, echo=FALSE}
+yhat <- predict(logit, type = "response")
+ybar <- mean(base$y)
+
+tabla_clasif <- function(yhat, y, umbral) {
+  pred <- as.integer(yhat > umbral)
+  I1 <- sum(pred == 0 & y == 0); I2 <- sum(pred == 0 & y == 1)
+  I3 <- sum(pred == 1 & y == 0); I4 <- sum(pred == 1 & y == 1)
+  total <- I1 + I2 + I3 + I4
+  data.frame(
+    Umbral = round(umbral, 3),
+    `% correctas` = round((I1 + I4) / total * 100, 1),
+    `Sensibilidad (y=1)` = round(I4 / (I2 + I4) * 100, 1),
+    `Especificidad (y=0)` = round(I1 / (I1 + I3) * 100, 1),
+    check.names = FALSE
+  )
+}
+clasif <- rbind(tabla_clasif(yhat, base$y, 0.5),
+                tabla_clasif(yhat, base$y, ybar))
+clasif$Umbral <- c("0,5 (estándar)", "y-barra (proporción muestral)")
+kable(clasif, caption = "Tabla de clasificación: % de predicciones correctas (modelo logit)")
+```
+
+Con el umbral estándar de 0,5 el modelo acierta en un `r clasif[1,2]`% de los casos, pero detecta correctamente solo el `r clasif[1,3]`% de los hogares realmente en inseguridad alimentaria (baja sensibilidad), porque el 0,5 es un umbral exigente cuando el resultado de interés ($\bar y \approx$ `r round(ybar,2)`) no es mayoritario en la muestra. Usando como umbral alternativo la proporción muestral de éxitos, el acierto total baja a `r clasif[2,2]`% pero el modelo queda mucho más balanceado entre sensibilidad (`r clasif[2,3]`%) y especificidad (`r clasif[2,4]`%).
+
+### Comparación con especificaciones alternativas
+
+Para verificar que distinguir entre informales y desempleados aporta información, se compara el modelo principal con uno sin variable laboral y con uno que solo separa al desempleado del resto de los jefes (ocupados, formales o informales).
+
+```{r comparacion-modelos, echo=FALSE}
+base$desempleado <- as.integer(base$cat_lab == "Desempleado")
+logit_des <- glm(y ~ desempleado + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+                 data = base, family = binomial(link = "logit"))
+logit_sinx <- glm(y ~ estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+                  data = base, family = binomial(link = "logit"))
+lr_cat_des <- anova(logit_des, logit, test = "Chisq")
+lr_cat_sinx <- anova(logit_sinx, logit, test = "Chisq")
+tab_cmp <- data.frame(
+  Modelo = c("Sin variable laboral", "Solo desempleado vs. resto", "Tres categorías (principal)"),
+  Parámetros = c(length(coef(logit_sinx)), length(coef(logit_des)), length(coef(logit))),
+  AIC = round(c(AIC(logit_sinx), AIC(logit_des), AIC(logit)), 1),
+  BIC = round(c(BIC(logit_sinx), BIC(logit_des), BIC(logit)), 1),
+  `Pseudo R2` = round(c(pseudo_r2(logit_sinx), pseudo_r2(logit_des), pseudo_r2(logit)), 3),
+  check.names = FALSE)
+kable(tab_cmp, row.names = FALSE, caption = "Comparación de especificaciones (menor AIC o BIC es mejor)")
+```
+
+La prueba de razón de verosimilitud rechaza el modelo sin variable laboral (p = `r format.pval(lr_cat_sinx[2, "Pr(>Chi)"], digits = 2)`, 2 grados de libertad). Frente al modelo que solo separa al desempleado, la categoría informal `r ifelse(lr_cat_des[2, "Pr(>Chi)"] < 0.05, "aporta", "no aporta")` poder explicativo adicional (p = `r round(lr_cat_des[2, "Pr(>Chi)"], 3)`, 1 grado de libertad); en términos de AIC y BIC, el modelo preferido es el de `r c("sin variable laboral", "solo desempleado", "tres categorías")[which.min(AIC(logit_sinx, logit_des, logit)$AIC)]` según AIC y el de `r c("sin variable laboral", "solo desempleado", "tres categorías")[which.min(BIC(logit_sinx, logit_des, logit)$BIC)]` según BIC. El pseudo $R^2$ más alto del modelo principal refleja en parte el mayor número de parámetros y no debe usarse por sí solo como criterio de calidad.
+
+## Robustez
+
+Contrastamos el resultado del modelo principal de tres maneras. Primero, cambiamos la muestra: (i) sin tope superior de edad (15 años o más) y (ii) incluyendo a los jefes inactivos como cuarta categoría, también sin tope de edad, porque casi todos son mayores de 64 años. Segundo, cambiamos la definición de *y*: (iii) una más estricta (solo inseguridad severa), (iv) una más amplia (cualquier nivel de inseguridad, es decir, puntaje ELCSA mayor o igual a 1), (v) cortes un punto más bajos y un punto más altos que el principal, y una *y* construida solo con los ítems de adultos (4 o más puntos). Tercero, cambiamos el modelo: (vi) sin controles, (vii) sin la educación del jefe y (viii) con los trabajadores por cuenta propia que pagan prestaciones clasificados como formales.
+
+```{r robustez-y-spec, echo=FALSE}
+base$y_sev <- as.integer(ifelse(base$tiene_menor, base$elcsa_score >= 10, base$elcsa_score >= 7))
+base$y_cualq <- as.integer(base$elcsa_score >= 1)
+fmt_coef <- function(m, v) {
+  s <- summary(m)$coefficients
+  if (!(v %in% rownames(s))) return("—")
+  ptxt <- ifelse(s[v, 4] < 0.001, "p<0,001", gsub(".", ",", sprintf("p=%.3f", s[v, 4]), fixed = TRUE))
+  paste0(gsub(".", ",", sprintf("%.2f", s[v, 1]), fixed = TRUE), " (", ptxt, ")")
+}
+pfmt <- function(p) ifelse(p < 0.001, "< 0,001", paste0("= ", format(round(p, 3), decimal.mark = ",")))
+fila_cat <- function(m, etiqueta) {
+  c(etiqueta, nobs(m), fmt_coef(m, "cat_labInformal"), fmt_coef(m, "cat_labDesempleado"),
+    fmt_coef(m, "cat_labNo activo"), fmt_coef(m, "sexo_jefe_mujer"))
+}
+f_ctrl <- y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe
+# Sin tope superior de edad (15 años o más), solo jefes en la fuerza laboral
+base_sin_tope <- s1 %>% filter(edad_jefe >= 15, !is.na(grupo_lab), !is.na(educ_jefe))
+base_sin_tope$y <- as.integer(base_sin_tope$insegura_mod_severa)
+base_sin_tope$sexo_jefe_mujer <- as.integer(base_sin_tope$sexo_jefe == 2)
+base_sin_tope$cat_lab <- factor(base_sin_tope$grupo_lab, levels = c("Formal", "Informal", "Desempleado"))
+logit_sin_tope <- glm(f_ctrl, data = base_sin_tope, family = binomial(link = "logit"))
+
+# Muestra que incluye a los jefes inactivos como cuarta categoría (sin tope de edad ni datos faltantes)
+base_na <- base0 %>% filter(edad_jefe >= 15, !is.na(grupo_lab), !is.na(educ_jefe))
+base_na$y <- as.integer(base_na$insegura_mod_severa)
+base_na$sexo_jefe_mujer <- as.integer(base_na$sexo_jefe == 2)
+base_na$cat_lab <- factor(base_na$grupo_lab, levels = c("Formal", "Informal", "Desempleado", "No activo"))
+logit_na <- glm(f_ctrl, data = base_na, family = binomial(link = "logit"))
+
+logit_sev <- update(logit, y_sev ~ ., data = base)
+logit_cualq <- update(logit, y_cualq ~ ., data = base)
+logit_sc <- glm(y ~ cat_lab, data = base, family = binomial(link = "logit"))
+base$y_c5 <- as.integer(ifelse(base$tiene_menor, base$elcsa_score >= 5, base$elcsa_score >= 3))
+base$y_c7 <- as.integer(ifelse(base$tiene_menor, base$elcsa_score >= 7, base$elcsa_score >= 5))
+base$y_ad <- as.integer(base$score_ad >= 4)
+logit_c5 <- update(logit, y_c5 ~ ., data = base)
+logit_c7 <- update(logit, y_c7 ~ ., data = base)
+logit_ad <- update(logit, y_ad ~ ., data = base)
+base_cp <- base
+base_cp$cat_lab[base_cp$situacion %in% c(3, 4) & base_cp$prestaciones == 1] <- "Formal"
+logit_cp <- glm(f_ctrl, data = base_cp, family = binomial(link = "logit"))
+pct <- function(v) format(round(100 * mean(v), 1), decimal.mark = ",")
+logit_sin_educ <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer,
+                      data = base, family = binomial(link = "logit"))
+tab_sens <- as.data.frame(rbind(
+  fila_cat(logit, "Principal (jefes de 15 a 64 años; y moderada/severa)"),
+  fila_cat(logit_sin_tope, "Sin tope de edad (15 años o más)"),
+  fila_cat(logit_na, "Incluyendo jefes inactivos (sin tope de edad)"),
+  fila_cat(logit_sev, paste0("y solo severa (", format(round(100 * mean(base$y_sev), 1), decimal.mark = ","), "% de hogares)")),
+  fila_cat(logit_cualq, paste0("y cualquier nivel (", format(round(100 * mean(base$y_cualq), 1), decimal.mark = ","), "% de hogares)")),
+  fila_cat(logit_c5, paste0("Corte de y más bajo: 5 con menores, 3 sin (", pct(base$y_c5), "% de hogares)")),
+  fila_cat(logit_c7, paste0("Corte de y más alto: 7 con menores, 5 sin (", pct(base$y_c7), "% de hogares)")),
+  fila_cat(logit_ad, paste0("y solo con ítems de adultos, 4 o más (", pct(base$y_ad), "% de hogares)")),
+  fila_cat(logit_sc, "Sin controles"),
+  fila_cat(logit_sin_educ, "Sin la educación del jefe"),
+  fila_cat(logit_cp, "Cuenta propia con prestaciones como formal")))
+colnames(tab_sens) <- c("Especificación (logit)", "N", "Informal", "Desempleado", "No activo", "Jefatura femenina")
+kable(tab_sens, row.names = FALSE,
+      caption = "Coeficientes (logit) frente a la categoría formal, según muestra, definición de y y controles")
+
+base$edad2 <- base$edad_jefe^2
+logit_edad2 <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + edad2 + sexo_jefe_mujer + educ_jefe,
+                   data = base, family = binomial(link = "logit"))
+logit_educf <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + factor(educ_jefe),
+                   data = base, family = binomial(link = "logit"))
+logit_menor <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe + tiene_menor,
+                   data = base, family = binomial(link = "logit"))
+logit_estf <- glm(y ~ cat_lab + factor(estrato) + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+                  data = base, family = binomial(link = "logit"))
+fila_spec <- function(m, etiqueta) {
+  c(etiqueta, round(AIC(m), 1), fmt_coef(m, "cat_labDesempleado"), fmt_coef(m, "cat_labInformal"))
+}
+tab_spec <- as.data.frame(rbind(
+  fila_spec(logit, "Principal"),
+  fila_spec(logit_edad2, "+ edad al cuadrado"),
+  fila_spec(logit_educf, "Educación como categórica"),
+  fila_spec(logit_menor, "+ hogar con menores"),
+  fila_spec(logit_estf, "Estrato como categórica")))
+colnames(tab_spec) <- c("Especificación de los controles", "AIC", "Desempleado", "Informal")
+kable(tab_spec, row.names = FALSE, caption = "Estabilidad de los coeficientes laborales ante cambios en los controles")
+
+wald_dif <- function(m, a, b) {
+  co <- coef(m); V <- vcov(m)
+  d <- co[a] - co[b]; se <- sqrt(V[a, a] + V[b, b] - 2 * V[a, b])
+  2 * pnorm(-abs(d / se))
+}
+p_des_inf <- wald_dif(logit, "cat_labDesempleado", "cat_labInformal")
+
+# Categoría informal separada en sus dos componentes
+base$cat4 <- factor(ifelse(base$cat_lab == "Informal",
+                           ifelse(base$situacion %in% c(3, 4), "Cuenta propia", "Asalariado sin prestaciones"),
+                           as.character(base$cat_lab)),
+                    levels = c("Formal", "Asalariado sin prestaciones", "Cuenta propia", "Desempleado"))
+logit_4 <- glm(y ~ cat4 + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+               data = base, family = binomial(link = "logit"))
+s4 <- summary(logit_4)$coefficients
+p_asal_cp <- wald_dif(logit_4, "cat4Asalariado sin prestaciones", "cat4Cuenta propia")
+
+logit_int2 <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe +
+                    desempleado:estrato,
+                  data = base, family = binomial(link = "logit"))
+p_int <- anova(logit, logit_int2, test = "Chisq")[2, "Pr(>Chi)"]
+coef_int <- coef(logit_int2)["estrato:desempleado"]
+pj <- function(m) round(summary(m)$coefficients["sexo_jefe_mujer", 4], 3)
+```
+
+El coeficiente del desempleo es positivo y significativo al 1% en todas las filas de las dos tablas anteriores: sin tope de edad, al incluir a los inactivos, con las definiciones alternativas y los cortes de *y*, sin controles, con otra clasificación de los cuenta propia y con los cambios en la especificación de los controles.
+
+La categoría informal es menos estable. Su coeficiente es positivo en todas las variantes, pero solo es significativo al 5% con definiciones de *y* más amplias o con cortes más bajos (cualquier nivel de inseguridad, el corte de 5 y 3, y solo con ítems de adultos) y sin controles. No lo es en el modelo principal, con el corte más alto, con *y* solo severa, sin la educación del jefe, con la muestra sin tope de edad o con los inactivos incluidos, ni al clasificar como formales a los cuenta propia que pagan prestaciones. Es decir, la informalidad se asocia con más inseguridad, pero la evidencia de que se distinga de los formales en la inseguridad moderada o severa es débil e imprecisa. Los jefes inactivos, cuando se incluyen, tampoco se distinguen de los formales (p = `r round(summary(logit_na)$coefficients["cat_labNo activo", 4], 2)`). En cambio, la prueba de Wald indica que el desempleo sí se distingue de la categoría informal (p = `r round(p_des_inf, 3)`).
+
+Por último, la interacción entre desempleo y estrato `r ifelse(p_int < 0.05, "es", "no es")` significativa (p = `r round(p_int, 2)`; coeficiente `r round(coef_int, 2)`): `r ifelse(p_int < 0.05, "la asociación del desempleo varía con el estrato", "no hay evidencia de que la asociación del desempleo varíe con el estrato")`, con la salvedad de que el estrato se modela como variable lineal y de que hay pocos desempleados en los estratos altos (`r sum(base$cat_lab == "Desempleado" & base$estrato >= 3)`), de modo que la prueba tiene poca potencia.
+
+**La categoría informal agrupa dos grupos distintos.** Al separarla, los asalariados sin prestaciones (`r n_asal_sp` hogares) tienen un coeficiente de `r round(s4["cat4Asalariado sin prestaciones", 1], 2)` (p `r pfmt(s4["cat4Asalariado sin prestaciones", 4])`) y los trabajadores por cuenta propia (`r n_cp` hogares) de `r round(s4["cat4Cuenta propia", 1], 2)` (p `r pfmt(s4["cat4Cuenta propia", 4])`); la diferencia entre ambos `r ifelse(p_asal_cp < 0.05, "es", "no es")` significativa (p = `r round(p_asal_cp, 3)`). El primer grupo es muy pequeño, por lo que esa estimación es poco precisa, pero ayuda a explicar por qué el coeficiente promedio de la categoría informal es moderado.
+
+**Variables de ingreso, gasto y apoyo.** Como se explicó en la sección 3.3, el ingreso y el gasto no entran en el modelo principal por ser mediadores. Para verificar que la conclusión no depende de esa decisión, se agregan una a una: el logaritmo del gasto mensual total del hogar (`K.11`), la dificultad para llegar a fin de mes (`L.2`, escala 0 a 10; es una percepción subjetiva), la posibilidad de pedir ayuda material a familiares o amigos (`U.2`), la recepción de ayudas de asistencia social (`H.27`, mayor que cero), si algún otro adulto del hogar trabaja (`H.31`) y el estado civil del jefe (`B.7`).
+
+```{r robustez-ingreso}
+ctrl_extra <- jefes %>% transmute(
+  hogar_id,
+  lgasto = ifelse(`K.11` > 0, log(`K.11`), NA_real_),
+  dif_fin_mes = `L.2`,
+  apoyo = ifelse(`U.2` %in% c(1, 2), as.integer(`U.2` == 1), NA_integer_),
+  asistencia = ifelse(`H.27` < 0, NA_integer_, as.integer(`H.27` > 0)),
+  pareja = ifelse(`B.7` < 0, NA_integer_, as.integer(`B.7` %in% c(2, 5, 6))),
+  civil = ifelse(`B.7` < 0, NA_integer_, `B.7`))
+# Otros adultos (18 años o más, distintos del jefe) con trabajo en el hogar
+otros_ocup <- df %>% filter(`B.1` != 1, `B.6` >= 18) %>% group_by(hogar_id) %>%
+  summarise(otro_ocup = as.integer(any(`H.31` %in% 1:4)), .groups = "drop")
+bx <- base %>% left_join(ctrl_extra, by = "hogar_id") %>% left_join(otros_ocup, by = "hogar_id")
+bx$otro_ocup[is.na(bx$otro_ocup)] <- 0L
+f_base <- y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe
+ajusta_extra <- function(extra, etiqueta) {
+  m <- glm(update(f_base, paste(". ~ . +", extra)), data = bx, family = binomial(link = "logit"))
+  c(etiqueta, nobs(m), fmt_coef(m, "cat_labDesempleado"), fmt_coef(m, "cat_labInformal"),
+    fmt_coef(m, "sexo_jefe_mujer"))
+}
+tab_extra <- as.data.frame(rbind(
+  c("Principal", nobs(logit), fmt_coef(logit, "cat_labDesempleado"), fmt_coef(logit, "cat_labInformal"),
+    fmt_coef(logit, "sexo_jefe_mujer")),
+  ajusta_extra("lgasto", "+ log del gasto mensual del hogar"),
+  ajusta_extra("dif_fin_mes", "+ dificultad para llegar a fin de mes"),
+  ajusta_extra("apoyo", "+ puede pedir ayuda material"),
+  ajusta_extra("asistencia", "+ recibe asistencia social"),
+  ajusta_extra("otro_ocup", "+ otro adulto ocupado en el hogar"),
+  ajusta_extra("pareja", "+ jefe casado o en unión libre"),
+  ajusta_extra("factor(civil)", "+ estado civil del jefe (6 categorías)")))
+m_otro <- glm(update(f_base, . ~ . + otro_ocup), data = bx, family = binomial(link = "logit"))
+m_par <- glm(update(f_base, . ~ . + pareja), data = bx, family = binomial(link = "logit"))
+colnames(tab_extra) <- c("Especificación", "N", "Desempleado", "Informal", "Jefatura femenina")
+kable(tab_extra, row.names = FALSE,
+      caption = "Coeficientes (logit) al agregar variables de ingreso, gasto y apoyo")
+m_gasto <- glm(update(f_base, . ~ . + lgasto), data = bx, family = binomial(link = "logit"))
+m_dif <- glm(update(f_base, . ~ . + dif_fin_mes), data = bx, family = binomial(link = "logit"))
+```
+
+El coeficiente del desempleo se mantiene positivo y significativo en todas las variantes (con el gasto: `r round(coef(m_gasto)["cat_labDesempleado"], 2)`, p `r pfmt(summary(m_gasto)$coefficients["cat_labDesempleado", 4])`). Se reduce al controlar por la dificultad para llegar a fin de mes (`r round(coef(m_dif)["cat_labDesempleado"], 2)`, p `r pfmt(summary(m_dif)$coefficients["cat_labDesempleado", 4])`), lo que es coherente con que parte del efecto del desempleo opere a través de las dificultades económicas del hogar, es decir, con que esas variables sean mediadoras y no controles inocuos.
+
+También probamos dos controles adicionales sobre la composición del hogar: si otro adulto del hogar trabaja y el estado civil del jefe. Ninguno resultó estadísticamente significativo (otro adulto ocupado: coeficiente `r round(coef(m_otro)["otro_ocup"], 2)`, p `r pfmt(summary(m_otro)$coefficients["otro_ocup", 4])`; jefe casado o en unión libre: `r round(coef(m_par)["pareja"], 2)`, p `r pfmt(summary(m_par)$coefficients["pareja", 4])`) y ninguno cambió de forma importante el coeficiente del desempleo, por lo que no los incluimos en el modelo principal.
+
+**Resumen de los controles evaluados.** El modelo principal usa cinco controles (estrato, tamaño del hogar, edad, sexo y educación del jefe), tomados de la literatura de la sección 1.1. Probamos además otros que no incluimos: formas funcionales alternativas (edad al cuadrado, educación y estrato categóricos), la presencia de menores, variables que pueden ser consecuencia del desempleo y por eso mediadoras (gasto, dificultad para llegar a fin de mes, ayuda material, asistencia social) y la composición del hogar (otro adulto ocupado, estado civil). Ninguna mejoró el ajuste ni cambió de forma importante el coeficiente del desempleo, que se mantiene positivo y significativo entre 1,22 y 1,76 en las tablas anteriores; dejamos constancia para mostrar que el resultado no depende de la elección de controles.
+
+## Factores de expansión: verificación
+
+El diccionario de datos de la ECV define el FEH como el factor de expansión de hogares, que es el que corresponde a las estimaciones sobre hogares. Se verifica cuántos valores distintos toma FEH entre los hogares del modelo y se re-estima el logit ponderado (con una familia cuasi-binomial para admitir pesos no enteros).
+
+```{r verificacion-pesos}
+valores_feh <- unique(round(base$feh, 6))
+logit_pond <- glm(y ~ cat_lab + estrato + tam_hogar + edad_jefe + sexo_jefe_mujer + educ_jefe,
+                  data = base, weights = feh / mean(feh), family = quasibinomial(link = "logit"))
+dif_max_coef <- max(abs(coef(logit) - coef(logit_pond)))
+```
+
+En Robledo, FEH toma `r ifelse(length(valores_feh) == 1, "un único valor", paste(length(valores_feh), "valores distintos"))` entre los `r nrow(base)` hogares del modelo (`r paste(format(round(valores_feh, 2), decimal.mark = ","), collapse = "; ")`). La mayor diferencia absoluta entre los coeficientes del logit sin ponderar y del ponderado es `r format(signif(dif_max_coef, 2), scientific = FALSE)`, es decir, nula. Los resultados no dependen de la ponderación.
+
+## Multicolinealidad
+
+```{=latex}
+\Needspace{12\baselineskip}
+```
+
+```{r vif, echo=FALSE}
+vif_vals <- vif(logit)
+if (is.matrix(vif_vals)) {
+  tab_vif <- data.frame(Variable = etq(rownames(vif_vals)), GVIF = round(vif_vals[, 1], 2),
+                        `GVIF^(1/(2·gl))` = round(vif_vals[, 3], 2), check.names = FALSE)
+} else {
+  tab_vif <- data.frame(Variable = etq(names(vif_vals)), VIF = round(vif_vals, 2))
+}
+kable(tab_vif, row.names = FALSE, caption = "Factores de inflación de varianza generalizados (modelo principal)")
+```
+
+Como el modelo incluye una variable categórica (situación laboral, con 2 grados de libertad), se reporta el GVIF y su versión ajustada por grados de libertad (`GVIF^(1/(2·gl))`), comparable con la raíz del VIF convencional. Los valores están por debajo de los umbrales de preocupación usuales, por lo que no hay evidencia de multicolinealidad problemática entre los regresores.
+
+# Resultados e interpretación
+
+```{r res-vars, include=FALSE}
+cs <- summary(logit)$coefficients
+ap <- ame_logit
+nm_des <- "cat_labDesempleado"; nm_inf <- "cat_labInformal"
+# Capacidad de discriminación: AUC dentro de la muestra y con validación cruzada (5 grupos, 20 repeticiones)
+auc <- function(p, y) { r <- rank(p); n1 <- sum(y == 1); (sum(r[y == 1]) - n1 * (n1 + 1) / 2) / (n1 * sum(y == 0)) }
+auc_in <- auc(fitted(logit), base$y)
+set.seed(2025)
+auc_cv <- mean(replicate(20, {
+  fold <- sample(rep(1:5, length.out = nrow(base))); pr <- numeric(nrow(base))
+  for (k in 1:5) {
+    mk <- glm(formula(logit), data = base[fold != k, ], family = binomial)
+    pr[fold == k] <- predict(mk, newdata = base[fold == k, ], type = "response")
+  }
+  auc(pr, base$y)
+}))
+```
+
+Los coeficientes y efectos parciales están en las tablas de la sección 4; aquí los interpretamos.
+
+**Situación laboral del jefe.** Tomando como referencia a los jefes formales, y controlando por estrato, tamaño del hogar, edad, sexo y educación del jefe, un hogar con jefe **desempleado** tiene una probabilidad de inseguridad alimentaria moderada o severa **`r round(ap[nm_des]*100,1)` puntos porcentuales mayor** (logit; coeficiente `r round(cs[nm_des,1],2)`, p `r pfmt(cs[nm_des,4])`). Los hogares con jefe **informal** (`r tab_cat["Informal"]` hogares) tienen una probabilidad `r round(ap[nm_inf]*100,1)` puntos mayor (coeficiente `r round(cs[nm_inf,1],2)`, p = `r round(cs[nm_inf,4],3)`), diferencia que es positiva pero imprecisa: no es estadísticamente significativa al 5% (el intervalo bootstrap del efecto parcial va de `r round(ic_ape[nm_inf,1],1)` a `r round(ic_ape[nm_inf,2],1)` puntos porcentuales) y su significancia cambia con la definición de *y* y con la de informal (sección 4.5). Con este tamaño de muestra solo se detectarían con probabilidad razonable asociaciones grandes (odds ratio de alrededor de `r round(exp(2.8 * cs[nm_inf, 2]), 1)`). Un valor-p alto quiere decir que con esta muestra no detectamos la diferencia, no que esta sea cero. La categoría informal, además, es heterogénea (sección 3.3). La prueba de Wald indica que el desempleo sí se distingue de la categoría informal (p = `r round(p_des_inf, 3)`). El probit da resultados prácticamente idénticos (tabla de efectos marginales), así que la conclusión no depende de la función de enlace.
+
+El efecto del desempleo se mantiene con las distintas muestras, definiciones de *y* y especificaciones de los controles de la sección de robustez, aunque su magnitud es incierta (intervalo bootstrap de `r round(ape_des_ic[1],1)` a `r round(ape_des_ic[2],1)` puntos porcentuales) y se trata de una asociación, no de un efecto causal.
+
+**Controles.** El estrato socioeconómico tiene el efecto negativo esperado (`r round(ap["estrato"]*100,1)` puntos porcentuales por nivel) y es, junto con el desempleo del jefe, el regresor con mayor significancia estadística. La educación del jefe (p = `r round(cs["educ_jefe",4],2)`), la edad del jefe (p = `r round(cs["edad_jefe",4],2)`) y el tamaño del hogar (p = `r round(cs["tam_hogar",4],2)`) no resultan significativos en esta muestra.
+
+**Jefatura femenina.** Los hogares con jefatura femenina tienen una probabilidad `r round(ap["sexo_jefe_mujer"]*100,1)` puntos porcentuales mayor de estar en inseguridad alimentaria (p = `r round(cs["sexo_jefe_mujer",4],3)`), controlando por la situación laboral. No es estadísticamente significativa al 5% en esta muestra ni en ninguna otra variante de la tabla de robustez, salvo cuando se incluyen los jefes inactivos (p = `r pj(logit_na)`), grupo con una alta proporción de mujeres de edad avanzada. Por eso no hay evidencia sólida de un efecto propio de la jefatura femenina; es apenas un indicio.
+
+**Ajuste.** El pseudo $R^2$ de McFadden es bajo (`r round(r2_logit,3)`) y el área bajo la curva ROC es de `r round(auc_in, 2)` dentro de la muestra y de `r round(auc_cv, 2)` con validación cruzada, lo que indica una discriminación modesta: el modelo sirve para estimar asociaciones, no para predecir ni focalizar hogares individuales. El modelo principal no incluye el ingreso ni el gasto del hogar (mediadores) ni otras variables que probablemente importan (por ejemplo, activos), y por eso la mayor parte de la variación de *y* queda sin explicar. Las variables adicionales que sí se probaron (gasto, dificultad para llegar a fin de mes, redes de apoyo y asistencia social; sección 4.5) no cambian la conclusión sobre el desempleo.
+
+## Trabajo de campo: encuesta a hogares de Robledo
+
+Como complemento cualitativo, tres integrantes del grupo aplicaron en persona, el 21 de octubre de 2026, una encuesta breve, anónima y voluntaria a ocho hogares de Robledo, los que se alcanzaron a encuestar por limitaciones de tiempo, condiciones climáticas y disposición de las personas en la zona visitada. Respondió un adulto del hogar que conociera la situación laboral del jefe o jefa. Cinco hogares tienen un jefe con contrato y prestaciones (los asimilamos a formal) y tres un jefe sin prestaciones o por cuenta propia (informal); ninguno tiene un jefe desempleado, así que la encuesta no permite contrastar el resultado central del modelo. Los hogares son de estrato 1 (uno), 2 (cuatro) y 3 (tres), y en cuatro viven menores de 18 años. En los últimos tres meses ningún hogar reportó que un adulto se preocupara porque la comida se acabara ni que sintiera hambre sin comer por falta de dinero; solo un hogar con jefe formal (estrato 2) reportó que un adulto dejó de desayunar, almorzar o cenar. Ninguno de los tres hogares con jefe informal reportó alguna de las tres situaciones.
+
+Aun así, los hogares describen un presupuesto ajustado: en seis de ocho los ingresos "apenas alcanzan", en uno "no alcanzan" y en uno "alcanzan y a veces sobra algo". Cuando el dinero no alcanza, cinco recurren a alguna estrategia (dos compran alimentos más baratos o de menor calidad, dos piden fiado o dinero prestado y uno reduce las porciones) y tres no hacen nada de eso. Seis de los ocho creen que el tipo de trabajo del jefe afecta "mucho" (tres) o "algo" (tres) lo que el hogar compra para comer. Las respuestas abiertas apuntan al ingreso y al tiempo de trabajo: "Mucho porque dependo del jefe de hogar para comer" (hogar con jefe formal, estrato 2) y "Me toca trabajar más de 8 horas y trabajar lejos y llegar con la comida" (hogar con jefe informal, estrato 2). Con ocho hogares, ninguno con jefe desempleado y sin selección aleatoria, estos relatos son compatibles con el canal del ingreso, pero no confirman ni contradicen las estimaciones. Esta evidencia es ilustrativa y complementaria; no es una muestra representativa y no se usa en la estimación.
+
+# Conclusiones e implicaciones de política
+
+Nuestros resultados indican que, en la comuna de Robledo y entre los hogares cuyo jefe está en la fuerza laboral, la inseguridad alimentaria moderada o severa está asociada de forma clara con el **desempleo del jefe de hogar**. La asociación se mantiene después de controlar por estrato, educación, tamaño del hogar, edad y sexo del jefe: la probabilidad es unos `r round(ap[nm_des]*100, 0)` puntos porcentuales mayor que la de un hogar con jefe formal, aunque la magnitud es incierta (intervalo de `r round(ape_des_ic[1],1)` a `r round(ape_des_ic[2],1)` puntos). Esa asociación es la única estable ante cambios en la muestra, en la definición de *y* y en los controles. El empleo informal tiene un coeficiente positivo pero impreciso. Con la definición principal de *y* no se distingue estadísticamente del formal, aunque sí lo hace con definiciones más amplias o con cortes más bajos, y la muestra no permite descartar efectos moderados ni grandes. El estrato también tiene una asociación clara (-10,5 puntos porcentuales por nivel), de modo que no se puede afirmar que el criterio de empleo deba reemplazarlo como criterio de focalización. Además, `r ifelse(p_int < 0.05, "la asociación del desempleo varía con el estrato", "no hay evidencia de que la asociación del desempleo cambie entre estratos")`. La encuesta de campo (sección 5.1) es solo ilustrativa: describe hogares con jefe formal e informal que reportan presupuestos ajustados, pero no incluye hogares con jefe desempleado y no confirma ni contradice estos resultados.
+
+En términos de política pública para Robledo, los datos sugieren, sobre todo, priorizar el apoyo alimentario y los mecanismos de protección ante el desempleo (empleabilidad, intermediación laboral, subsidios temporales) para hogares cuyo jefe está desempleado. **No se puede concluir con estos datos** que la formalización de los trabajadores informales reduzca la inseguridad alimentaria: el coeficiente de los informales no es estadísticamente distinto de cero con la definición principal de *y*, es sensible a la especificación y la muestra no permite descartar efectos moderados. Los resultados tampoco dicen nada sobre los hogares con jefe inactivo.
+
+## Oferta pública vigente relacionada con los hallazgos
+
+Como la asociación más clara es con el desempleo del jefe de hogar, la política pertinente combina apoyo alimentario inmediato con vías de reinserción laboral. Recordemos que los resultados son asociaciones, no efectos causales, y que no evalúan ningún programa. La Alcaldía de Medellín ya tiene instrumentos en ambos frentes. La **Alianza Medellín Cero Hambre** es una estrategia intersectorial que articula al sector público, privado y social para garantizar el acceso a alimentos a hogares en inseguridad alimentaria moderada y severa, en todas las comunas y corregimientos: combina proyectos del Distrito (paquetes y bonos alimentarios, Programa de Alimentación Escolar, Buen Comienzo 365, entre otros), donaciones convertidas en vales alimentarios y una plataforma de inteligencia artificial que conecta restaurantes, supermercados y hoteles con los bancos de alimentos. Su población objeto es de 90.283 hogares con inseguridad severa y 131.403 con moderada, según la Alcaldía, que no indica la fuente ni el año de la cifra (Alcaldía de Medellín, 2026). La **Oficina Pública de Empleo**, de la Secretaría de Desarrollo Económico, ofrece registro de hoja de vida, asesoría para definir el perfil laboral, talleres de proyección laboral e intermediación, con puntos de atención en varias comunas (Alcaldía de Medellín, Secretaría de Desarrollo Económico, s.f.). La propia Alianza plantea, entre sus retos 2026, fortalecer las alianzas con el sector productivo para vincular a las familias a procesos de empleabilidad (Alcaldía de Medellín, 2026), lo que muestra que el diseño institucional ya contempla conectar ambos frentes. No verificamos la oferta específica de estos programas en Robledo.
+
+De los resultados se derivan tres recomendaciones. (i) Considerar el desempleo del jefe como criterio de priorización, junto con el estrato, al seleccionar hogares para el apoyo alimentario en Robledo; el modelo discrimina de forma modesta, así que orienta prioridades y no decisiones sobre hogares individuales. (ii) Conectar a esos jefes con la ruta de empleabilidad de la Oficina Pública de Empleo. (iii) No recomendar la formalización como vía para reducir la inseguridad alimentaria con base en este trabajo, porque el coeficiente de los informales no es estadísticamente distinto de cero con la definición principal de *y* (el de los trabajadores por cuenta propia, tomados por separado, tampoco: `r round(s4["cat4Cuenta propia", 1], 2)`, p `r pfmt(s4["cat4Cuenta propia", 4])`).
+
+## Limitaciones del estudio
+
+- **Medición de *y*:** la inseguridad alimentaria se aproxima con la ELCSA de la ECV y los puntos de corte de la FAO; no es una clasificación oficial publicada para esta encuesta. El módulo difiere del estándar (14 ítems usados frente a 15, y solo 6 de los 7 ítems estándar para hogares con menores) y la ECV pregunta por 30 días, mientras que el Anexo 6.18 de la Alcaldía describe un período de 3 meses, por lo que la prevalencia no es directamente comparable con otras fuentes (sección 3.2).
+- **Población de análisis:** la muestra incluye solo hogares con jefe en la fuerza laboral (ocupado o desempleado) y de 15 a 64 años. Los resultados no se extienden a los hogares con jefe inactivo, que son una parte importante de los hogares de Robledo (`r n_noact` de `r n_jefe` hogares con jefe identificado).
+- **Informalidad aproximada:** se mide por la ausencia de prestaciones sociales y por el trabajo por cuenta propia, no por el registro del negocio, y la categoría agrupa situaciones distintas.
+- **Tamaño de los grupos y potencia:** los grupos formal (`r tab_cat["Formal"]` hogares), informal (`r tab_cat["Informal"]`) y desempleado (`r tab_cat["Desempleado"]`) son pequeños, así que los intervalos son anchos. Para la categoría informal solo se detectarían con probabilidad razonable asociaciones grandes (odds ratio de alrededor de `r round(exp(2.8 * cs[nm_inf, 2]), 1)`), y su significancia cambia con la definición de *y* y de informal (sección 4.5); además agrupa a asalariados sin prestaciones y a trabajadores por cuenta propia, que se comportan distinto.
+- **Diseño muestral:** no se ajustan los errores estándar por conglomerados ni estratos, porque la ficha técnica de la ECV describe un muestreo aleatorio simple; si el diseño real fuera más complejo, los errores estándar podrían estar subestimados.
+- **Selección de la comuna:** Robledo se eligió después de explorar las 16 comunas, sin corrección por comparaciones múltiples. Los resultados corresponden a una sola comuna y no deben extrapolarse a otras ni al total de la ciudad.
+- **Ajuste y controles:** el pseudo $R^2$ es bajo. El ingreso y el gasto del hogar no entran en el modelo principal por ser mediadores; al agregarlos en la sección 4.5 la conclusión sobre el desempleo se mantiene, pero no se descarta la omisión de otras variables relevantes (activos, composición de los ingresos del hogar).
+- **Factores de expansión:** no se usan porque son constantes dentro de Robledo (ver sección 4.6).
+- **Unidad de observación:** *x* describe solo al jefe de hogar. La ECV registra la situación laboral de los demás miembros, pero no la usamos, de modo que el modelo no distingue si otros integrantes trabajan o aportan ingresos, lo que puede atenuar o confundir la asociación estimada.
+- **Causalidad:** los datos son transversales y no hay un instrumento válido, por lo que no se puede descartar la endogeneidad; la relación entre empleo y seguridad alimentaria podría correr también en sentido inverso. Los resultados son asociaciones, no efectos causales.
+
+# Referencias
+
+- Alcaldía de Medellín (2025). *Anexo 6.18. Orientaciones para la aplicación de la ELCSA*. https://www.medellin.gov.co/es/wp-content/uploads/2025/05/Anexo-6.18-Orientaciones-para-la-aplicacion-de-la-ELCSA-1.pdf
+- Alcaldía de Medellín (2026). *Proyectos estratégicos*, apartado 4.1, "Alianza Medellín Cero Hambre". https://www.medellin.gov.co/es/wp-content/uploads/2026/04/4.-Proyectos-estrategicos.pdf
+- Alcaldía de Medellín, Departamento Administrativo de Planeación (2015). *Plan de Desarrollo Local Comuna 7 Robledo "Robledo me seduce" 2016-2027. Documento estratégico*. Medellín: Alcaldía de Medellín.
+- Alcaldía de Medellín, Departamento Administrativo de Planeación (2025). *Encuesta de Calidad de Vida de Medellín 2025*: microdatos, diccionario de variables y ficha técnica.
+- Alcaldía de Medellín, Secretaría de Desarrollo Económico (s.f.). *Oficina Pública de Empleo del Distrito de Medellín*. https://www.medellin.gov.co/es/secretaria-desarrollo-economico/subsecretaria-de-creacion-y-fortalecimiento-empresarial/oferta-publica-de-empleo/
+- Álvarez-Uribe, M. C., Estrada-Restrepo, A. y Fonseca-Centeno, Z. Y. (2010). Caracterización de los hogares colombianos en inseguridad alimentaria según calidad de vida. *Revista de Salud Pública, 12*(6), 877-888. https://doi.org/10.1590/S0124-00642010000600001
+- Attanasio, O., Kugler, A. y Meghir, C. (2011). Subsidizing vocational training for disadvantaged youth in Colombia: Evidence from a randomized trial. *American Economic Journal: Applied Economics, 3*(3), 188-220. https://doi.org/10.1257/app.3.3.188
+- Attanasio, O. y Mesnard, A. (2006). The impact of a conditional cash transfer programme on consumption in Colombia. *Fiscal Studies, 27*(4), 421-442. https://doi.org/10.1111/j.1475-5890.2006.00041.x
+- Del Castillo, S. E., Patiño, G. A. y Herrán, O. F. (2012). Inseguridad alimentaria: variables asociadas y elementos para la política social. *Biomédica, 32*(4), 545-556. https://www.redalyc.org/pdf/843/84324951010.pdf
+- Departamento Administrativo de Planeación [DAP] (2021). *Comuna 7: Robledo. Ficha de caracterización* (datos ECV/IMCV 2019, GEIH 2019 y población 2020). Alcaldía de Medellín.
+- Departamento Administrativo Nacional de Estadística [DANE] (2009). *Metodología informalidad. Gran Encuesta Integrada de Hogares (GEIH)*. \url{https://www.dane.gov.co/files/investigaciones/boletines/ech/ech\_informalidad/metodologia\_informalidad.pdf}
+- Departamento Administrativo Nacional de Estadística [DANE] (2023). *Escala de experiencia de inseguridad alimentaria (FIES) 2022. Boletín técnico*. https://www.dane.gov.co/files/operaciones/FIES/bol-FIES-2022.pdf
+- FAO (2012). *Escala Latinoamericana y Caribeña de Seguridad Alimentaria (ELCSA): Manual de uso y aplicaciones*. Comité Científico de la ELCSA. Organización de las Naciones Unidas para la Alimentación y la Agricultura.
+- FAO, Programa CE-FAO (2011). *La seguridad alimentaria: información para la toma de decisiones. Guía práctica: una introducción a los conceptos básicos de la seguridad alimentaria*. https://www.fao.org/3/al936s/al936s.pdf
+- García, G. A. (2026). *Modelos de elección discreta*. Notas de clase, Econometría II, Universidad EAFIT.
+- Gujarati, D. y Porter, D. (2010). *Econometría*. 5a edición. México: Mc Graw Hill. Cap. 15.
+- Hernández-Vásquez, A., Visconti-Lopez, F. J. y Vargas-Fernández, R. (2022). Factors associated with food insecurity in Latin America and the Caribbean countries: A cross-sectional analysis of 13 countries. *Nutrients, 14*(15), 3190. https://doi.org/10.3390/nu14153190
+- Huang, J., Kim, Y. y Birkenmaier, J. (2016). Unemployment and household food hardship in the economic recession. *Public Health Nutrition, 19*(3), 511-519. https://doi.org/10.1017/S1368980015001603
+- Instituto Colombiano de Bienestar Familiar [ICBF] (2020). *Resumen ejecutivo ENSIN 2015*. https://www.icbf.gov.co/sites/default/files/resumen_ejecutivo_ensin.pdf
+- Ley 1098 de 2006. Por la cual se expide el Código de la Infancia y la Adolescencia. Diario Oficial 46.446, 8 de noviembre de 2006. http://www.secretariasenado.gov.co/senado/basedoc/ley_1098_2006.html
+- Medina Rodríguez, M., Bello Durán, L. A., Torres Jaramillo, S. V., Cifuentes Cuartas, J., Rengifo Hernández, K. D. y Agudelo Martínez, A. (2024). Ponderación de factores asociados con la inseguridad alimentaria en hogares beneficiarios del Paquete Alimentario Familiar, Distrito Especial de Medellín 2022. *Revista Gerencia y Políticas de Salud, 23*. https://doi.org/10.11144/Javeriana.rgps23.pfia
+- Muñoz-Astudillo, M. N., Martínez, J. W. y Quintero, A. R. (2010). Validación de la Escala Latinoamericana y Caribeña de Seguridad Alimentaria en gestantes adolescentes. *Revista de Salud Pública, 12*(2), 173-183. https://www.redalyc.org/pdf/422/42217805001.pdf
+- Organización Internacional del Trabajo [OIT] (2003). *Directrices sobre una definición estadística de empleo informal*. 17.ª Conferencia Internacional de Estadísticos del Trabajo. https://webapps.ilo.org/public/spanish/bureau/stat/download/guidelines/defempl.pdf
+- Puerta Zapata, J., Sánchez Orozco, E. C., Echavarría Osorio, C., Yánez Triana, V., Arango Ruiz, M. y Gómez Velásquez, S. (2026). Cambios en indicadores de inseguridad alimentaria y estrategias de afrontamiento del hogar, antes y después de la estrategia de bono alimentario en Medellín, Colombia (2024). *Población y Salud en Mesoamérica, 24*(1). https://doi.org/10.15517/3dfx2846
+- Santos, M. P., Brewer, J. D., Lopez, M. A., Paz-Soldan, V. A. y Chaparro, M. P. (2022). Determinants of food insecurity among households with children in Villa el Salvador, Lima, Peru: The role of gender and employment, a cross-sectional study. *BMC Public Health, 22*, 717. https://doi.org/10.1186/s12889-022-12889-4
+- Sinclair, K., Thompson-Colón, T., Del Castillo Matamoros, S. E., Olaya, E. y Melgar-Quiñonez, H. (2022). Food insecurity among the adult population of Colombia between 2016 and 2019: The post peace agreement situation. *Food and Nutrition Bulletin, 43*(3), 251-270. https://doi.org/10.1177/03795721221100890
+- Wooldridge, J. (2013). *Introducción a la econometría. Un enfoque moderno*. 5a edición. México: Cengage Learning. Sección 7.5, Cap. 17.

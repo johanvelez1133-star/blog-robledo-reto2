@@ -1,0 +1,7 @@
+---
+pagetitle: "Hambre y trabajo en Robledo"
+---
+
+```{=html}
+{{< include _pagina.html >}}
+```
