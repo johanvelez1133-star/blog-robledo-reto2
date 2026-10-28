@@ -4,9 +4,10 @@ Página única, creativa y hecha para que cualquiera la entienda: pregunta, dato
 
 ## Estructura
 - `index.qmd` + `_pagina.html`: el contenido de la página.
-- `descargas/`: los 6 archivos que se ofrecen en el blog.
+- `descargas/`: los 6 archivos que se ofrecen en el blog (PDF, QMD y 4 tablas en Excel; las tablas también están en CSV).
+- `img/`: foto del equipo, foto y video de campo.
 - `docs/`: el sitio ya construido (lo que se publica).
-- `scripts/exportar_base_y_resultados.R`: genera los CSV (base para los Excel) desde el informe y la ECV.
+- `scripts/exportar_base_y_resultados.R`: genera los CSV desde el informe y la ECV (requiere `full.R`, el código del informe extraído con `knitr::purl`, y `ECV_2025.xlsx`).
 
 ## Publicar en línea (elijan UNA opción)
 
@@ -23,11 +24,11 @@ Página única, creativa y hecha para que cualquiera la entienda: pregunta, dato
 
 ## Después de publicar
 - Abran el enlace en el computador y en el celular. Comprueben que se animan las gráficas, que funciona el simulador y que descargan los 6 archivos.
-- Agreguen fotos o capturas de las encuestas de campo si las tienen (el enunciado pide evidencia de las entrevistas): guárdenlas en `descargas/` y enlácenlas en la sección "Voces de Robledo" (`_pagina.html`); luego `quarto render`.
+- Las fotos y el video del trabajo de campo están en `img/` y se muestran en "Voces de Robledo" (`_pagina.html`). Para cambiarlos: reemplacen el archivo y ejecuten `quarto render`.
 - Compartan el enlace con el profesor y difúndanlo: el bono depende de las visitas.
 
 ## Editar y reconstruir
 Cambien `_pagina.html` y ejecuten `quarto render` (necesita Quarto; no usa R en la página, todo está en el HTML).
 
 ## Datos
-La ECV completa la publica la Alcaldía de Medellín y no se redistribuye aquí; el CSV contiene solo las variables usadas para los 276 hogares.
+La ECV completa la publica la Alcaldía de Medellín y no se redistribuye aquí; los archivos de datos contienen solo las variables usadas para los 276 hogares.
