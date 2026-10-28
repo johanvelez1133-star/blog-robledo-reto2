@@ -5,6 +5,7 @@ project:
     - index.qmd
   resources:
     - descargas/*
+    - img/*
 
 website:
   title: "Hambre y trabajo en Robledo"
