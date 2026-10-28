@@ -1,4 +1,4 @@
-# Blog del Reto 2 — Grupo 5 (Econometría II, EAFIT)
+# Blog del Reto 2 (Econometría II, EAFIT)
 
 Página única, creativa y hecha para que cualquiera la entienda: pregunta, datos, modelo "sin fórmulas", gráficos animados, un simulador interactivo, pruebas de robustez, voces de los hogares encuestados, política pública y glosario. Descargas: informe PDF, código .qmd, base de datos final, resultados y encuesta de campo.
 
