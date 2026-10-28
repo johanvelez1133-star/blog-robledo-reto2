@@ -20,3 +20,4 @@ format:
     toc: false
     title-block-style: none
     page-layout: custom
+    include-in-header: ga.html
