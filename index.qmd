@@ -1,5 +1,7 @@
 ---
 pagetitle: "Hambre y trabajo en Robledo"
+description: "¿Qué pasa con la comida cuando el jefe del hogar se queda sin empleo? Un análisis con datos de la Encuesta de Calidad de Vida de Medellín 2025."
+image: img/equipo_en_campo.jpg
 ---
 
 ```{=html}

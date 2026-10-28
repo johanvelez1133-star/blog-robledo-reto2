@@ -6,7 +6,7 @@ Página única, creativa y hecha para que cualquiera la entienda: pregunta, dato
 - `index.qmd` + `_pagina.html`: el contenido de la página.
 - `descargas/`: los 6 archivos que se ofrecen en el blog.
 - `docs/`: el sitio ya construido (lo que se publica).
-- `scripts/exportar_base_y_resultados.R`: genera los CSV desde el informe y la ECV.
+- `scripts/exportar_base_y_resultados.R`: genera los CSV (base para los Excel) desde el informe y la ECV.
 
 ## Publicar en línea (elijan UNA opción)
 
